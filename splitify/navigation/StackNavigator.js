@@ -15,6 +15,8 @@ import NewExpenseFriend from "../screens/NewExpenseFriend";
 import NewExpenseGroup from "../screens/NewExpenseGroup";
 import ExpenseSuccessScreen from "../screens/ExpenseSuccessScreen";
 import AddFriendScreen from "../screens/AddFriendScreen";
+import CreateGroupScreen from '../screens/CreateGroupScreen';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -32,6 +34,7 @@ const StackNavigator = () => {
       <Stack.Screen name="SettleUpSelect" component={SettleUpSelectMethod} />
       <Stack.Screen name="SettleUpSuccess" component={SettleUpSuccess} />
       <Stack.Screen name="AddFriend" component={AddFriendScreen} />
+      <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
       <Stack.Screen
         name="SettleUpGroupSelect"
         component={SettleUpGroupSelect}

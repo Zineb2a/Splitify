@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  FlatList,
 } from "react-native";
 import {
   Ionicons,
@@ -25,17 +24,16 @@ const DashboardScreen = () => {
   const { user } = useUser();
 
   const [friends, setFriends] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loadingFriends, setLoadingFriends] = useState(true);
+  const [loadingGroups, setLoadingGroups] = useState(true);
 
   const loadFriends = async () => {
     try {
       const friendsRef = collection(db, "users", user.uid, "friends");
       const snapshot = await getDocs(friendsRef);
-      const loadedFriends = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setFriends(loadedFriends);
+      const loaded = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setFriends(loaded);
     } catch (error) {
       console.error("Error loading friends:", error);
     } finally {
@@ -43,68 +41,90 @@ const DashboardScreen = () => {
     }
   };
 
+  const loadGroups = async () => {
+    try {
+      const groupsRef = collection(db, "users", user.uid, "groups");
+      const snapshot = await getDocs(groupsRef);
+      const loaded = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setGroups(loaded);
+    } catch (error) {
+      console.error("Error loading groups:", error);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
   useEffect(() => {
     loadFriends();
+    loadGroups();
   }, []);
 
   const renderContent = () => {
     if (activeTab === "FRIENDS") {
-      return (
-        <>
-          {friends.length === 0 && !loadingFriends ? (
-            <Text style={styles.emptyText}>No friends added yet.</Text>
-          ) : (
-            friends.map((friend, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.card}
-                onPress={() =>
-                  navigation.navigate("ExpenseDetail", {
-                    type: "friend",
-                    name: friend.name,
-                    amount: "$0",
-                    youOwe: false,
-                    entries: [],
-                  })
-                }
-              >
-                <View style={[styles.circleAvatar, { borderColor: "#4CAF50" }]}>
-                  <Text style={[styles.circleText, { color: "#4CAF50" }]}>
-                    {friend.name[0]}
-                  </Text>
-                </View>
-                <View style={styles.textContent}>
-                  <Text style={styles.cardTitle}>{friend.name}</Text>
-                  <Text style={styles.cardSubtitle}>{friend.phone}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </>
-      );
+      if (!loadingFriends && friends.length === 0) {
+        return <Text style={styles.emptyText}>No friends yet.</Text>;
+      }
+
+      return friends.map((friend, index) => (
+        <TouchableOpacity
+          key={index}
+          style={styles.card}
+          onPress={() =>
+            navigation.navigate("ExpenseDetail", {
+              type: "friend",
+              name: friend.name,
+              amount: "$0",
+              youOwe: false,
+              entries: [],
+            })
+          }
+        >
+          <View style={[styles.circleAvatar, { borderColor: "#4CAF50" }]}>
+            <Text style={[styles.circleText, { color: "#4CAF50" }]}>
+              {friend.name?.[0] || "?"}
+            </Text>
+          </View>
+          <View style={styles.textContent}>
+            <Text style={styles.cardTitle}>{friend.name}</Text>
+            <Text style={styles.cardSubtitle}>{friend.phone}</Text>
+          </View>
+        </TouchableOpacity>
+      ));
     }
 
     if (activeTab === "GROUPS") {
-      return (
+      if (!loadingGroups && groups.length === 0) {
+        return <Text style={styles.emptyText}>No groups yet.</Text>;
+      }
+
+      return groups.map((group, index) => (
         <TouchableOpacity
+          key={index}
           style={styles.card}
-          onPress={() => navigation.navigate("SettleUpGroupSelect")}
+          onPress={() =>
+            navigation.navigate("GroupDetail", {
+              groupId: group.id,
+              groupName: group.name,
+              members: group.members,
+            })
+          }
         >
-          <FontAwesome5 name="mountain" size={24} color="#9FB3DF" />
+          <FontAwesome5 name="users" size={24} color="#9FB3DF" />
           <View style={styles.textContent}>
-            <Text style={styles.cardTitle}>Sample Group</Text>
-            <Text style={styles.cardSubtitle}>You owe John</Text>
+            <Text style={styles.cardTitle}>{group.name}</Text>
+            <Text style={styles.cardSubtitle}>
+              {group.members?.length || 0} members
+            </Text>
           </View>
-          <Text style={styles.amount}>$500</Text>
         </TouchableOpacity>
-      );
+      ));
     }
 
     return (
       <View style={styles.card}>
-        <Feather name="shopping-bag" size={24} color="#9FB3DF" />
+        <Feather name="clock" size={24} color="#9FB3DF" />
         <View style={styles.textContent}>
-          <Text style={styles.cardTitle}>Activity feed coming soon</Text>
+          <Text style={styles.cardTitle}>No recent activity yet.</Text>
         </View>
       </View>
     );
@@ -128,12 +148,12 @@ const DashboardScreen = () => {
           style={styles.menuDots}
         />
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user.name[0]}</Text>
+          <Text style={styles.avatarText}>{user.name?.[0]}</Text>
         </View>
         <Text style={styles.name}>{user.name}</Text>
       </View>
 
-      {/* Balance Summary */}
+      {/* Balances */}
       <View style={styles.balanceCard}>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>You are owed</Text>
@@ -165,7 +185,7 @@ const DashboardScreen = () => {
         {renderContent()}
       </ScrollView>
 
-      {/* FAB Add Friend / Add Group */}
+      {/* Floating Action Buttons */}
       {activeTab === "FRIENDS" && (
         <TouchableOpacity
           style={styles.fab}
@@ -174,13 +194,18 @@ const DashboardScreen = () => {
           <Ionicons name="person-add" size={30} color="#FAFAFA" />
         </TouchableOpacity>
       )}
+
       {activeTab === "GROUPS" && (
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => navigation.navigate("CreateGroup")}
-        >
-          <Ionicons name="people" size={30} color="#FAFAFA" />
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity
+            style={[styles.fab]}
+            onPress={() => navigation.navigate("CreateGroup")}
+          >
+            <Ionicons name="people" size={30} color="#FAFAFA" />
+          </TouchableOpacity>
+         
+          
+        </>
       )}
     </View>
   );
@@ -268,10 +293,11 @@ const styles = StyleSheet.create({
   textContent: { flex: 1 },
   cardTitle: { fontSize: 14, fontWeight: "600", color: "#333" },
   cardSubtitle: { fontSize: 13, color: "#777", marginTop: 2 },
-  amount: {
+  emptyText: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
+    color: "#777",
+    textAlign: "center",
+    marginTop: 20,
   },
   fab: {
     position: "absolute",
@@ -284,11 +310,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     elevation: 4,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#777",
-    textAlign: "center",
-    marginTop: 20,
   },
 });

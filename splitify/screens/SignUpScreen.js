@@ -6,29 +6,29 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../firebase"; // adjust path if needed
-import { Alert } from "react-native";
+import { auth, db } from "../firebase";
 
 const SignUpScreen = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState(""); // ✅ New phone number state
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
 
   const navigation = useNavigation();
 
   const handleSignUp = async () => {
-    if (!email || !password || !name || !agree) {
+    if (!name || !email || !phone || !password || !agree) {
       Alert.alert("Please fill all fields and agree to the terms.");
       return;
     }
 
     try {
-      // First check if email exists before attempting creation
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
@@ -38,20 +38,19 @@ const SignUpScreen = () => {
       await setDoc(doc(db, "users", userCredential.user.uid), {
         name,
         email,
+        phone, // ✅ Saving phone number to Firestore
         createdAt: new Date(),
       });
 
       navigation.navigate("Login");
     } catch (error) {
       if (error.code === "auth/email-already-in-use") {
-        // Email already exists, so user is already registered
         Alert.alert(
           "Account exists",
           "This email is already registered. Please log in instead.",
           [{ text: "Go to Login", onPress: () => navigation.navigate("Login") }]
         );
       } else {
-        // Handle other errors
         Alert.alert("Signup failed", error.message);
       }
     }
@@ -62,7 +61,7 @@ const SignUpScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <Image
-          source={require("../assets/logo.png")} // Your logo here
+          source={require("../assets/logo.png")}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -80,8 +79,17 @@ const SignUpScreen = () => {
         <TextInput
           style={styles.input}
           placeholder="Enter your email"
+          keyboardType="email-address"
+          autoCapitalize="none"
           value={email}
           onChangeText={setEmail}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your phone number"
+          keyboardType="phone-pad"
+          value={phone}
+          onChangeText={setPhone}
         />
         <TextInput
           style={styles.input}
@@ -91,7 +99,6 @@ const SignUpScreen = () => {
           onChangeText={setPassword}
         />
 
-        {/* Custom Checkbox */}
         <TouchableOpacity
           style={styles.checkboxContainer}
           onPress={() => setAgree(!agree)}
@@ -104,12 +111,10 @@ const SignUpScreen = () => {
           </Text>
         </TouchableOpacity>
 
-        {/* Sign Up Button */}
         <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp}>
           <Text style={styles.signUpButtonText}>Sign Up</Text>
         </TouchableOpacity>
 
-        {/* Link to Sign In */}
         <Text style={styles.bottomText}>
           Already have an account?{" "}
           <Text
