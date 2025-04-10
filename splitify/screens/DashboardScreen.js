@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,12 +14,12 @@ import {
   Feather,
 } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useUser } from "../UserContext";
 
 const DashboardScreen = ({ route }) => {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("FRIENDS");
-
-  const { userName } = route.params;
+  const { user } = useUser();
 
   const friendsData = [
     {
@@ -208,9 +208,9 @@ const DashboardScreen = ({ route }) => {
           style={styles.menuDots}
         />
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{userName[0]}</Text>
+          <Text style={styles.avatarText}>{user.name[0]}</Text>
         </View>
-        <Text style={styles.name}>{userName}</Text>
+        <Text style={styles.name}>{user.name}</Text>
       </View>
 
       {/* Balance */}
