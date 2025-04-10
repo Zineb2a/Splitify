@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  FlatList,
 } from "react-native";
 import {
   Ionicons,
@@ -15,179 +16,98 @@ import {
 } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useUser } from "../UserContext";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
 
-const DashboardScreen = ({ route }) => {
+const DashboardScreen = () => {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("FRIENDS");
   const { user } = useUser();
 
-  const friendsData = [
-    {
-      letter: "S",
-      name: "Subodh Kolhe",
-      subtitle: "You owe",
-      amount: "$500",
-      color: "#F44336",
-    },
-    {
-      letter: "S",
-      name: "Shobhit Bakliwal",
-      subtitle: "owes you",
-      amount: "$500",
-      color: "#4CAF50",
-    },
-    {
-      letter: "F",
-      name: "Firasat Durrani",
-      subtitle: "owes you",
-      amount: "$500",
-      color: "#4CAF50",
-    },
-    {
-      letter: "S",
-      name: "Sushil Kumar",
-      subtitle: "You owe",
-      amount: "$500",
-      color: "#F44336",
-    },
-  ];
+  const [friends, setFriends] = useState([]);
+  const [loadingFriends, setLoadingFriends] = useState(true);
 
-  const groupsData = [
-    {
-      icon: <FontAwesome5 name="mountain" size={24} color="#9FB3DF" />,
-      title: "Trip To Lonavala",
-      subtitle: "You owe Shubham",
-      amount: "$500",
-    },
-    {
-      icon: <FontAwesome5 name="film" size={24} color="#4CAF50" />,
-      title: "Movie Night",
-      subtitle: "Shobhit owes you",
-      amount: "$500",
-    },
-    {
-      icon: <MaterialIcons name="restaurant" size={24} color="#4CAF50" />,
-      title: "Dinner at Canto",
-      subtitle: "Firasat owes you",
-      amount: "$500",
-    },
-    {
-      icon: <FontAwesome5 name="campground" size={24} color="#F44336" />,
-      title: "Trip To Matheran",
-      subtitle: "You owe Sushil Kumar",
-      amount: "$500",
-    },
-  ];
-
-  const activityData = [
-    {
-      icon: <Feather name="shopping-bag" size={24} color="#9FB3DF" />,
-      title: "You added Fries",
-      subtitle: "Shobhit owes you",
-    },
-    {
-      icon: <FontAwesome5 name="film" size={24} color="#4CAF50" />,
-      title: 'Shobhit added to the group "Movie Night"',
-    },
-    {
-      icon: <FontAwesome5 name="mountain" size={24} color="#9FB3DF" />,
-      title: 'You added Shubham to the group "Trip To Lonavala"',
-    },
-    {
-      icon: <Ionicons name="checkmark-done" size={24} color="#F44336" />,
-      title: "You settled with Sushil Kumar",
-      subtitle: "You paid $500",
-    },
-  ];
-
-  const handleMenu = () => {
-    Alert.alert("Menu", "This will open the drawer later");
+  const loadFriends = async () => {
+    try {
+      const friendsRef = collection(db, "users", user.uid, "friends");
+      const snapshot = await getDocs(friendsRef);
+      const loadedFriends = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setFriends(loadedFriends);
+    } catch (error) {
+      console.error("Error loading friends:", error);
+    } finally {
+      setLoadingFriends(false);
+    }
   };
+
+  useEffect(() => {
+    loadFriends();
+  }, []);
 
   const renderContent = () => {
     if (activeTab === "FRIENDS") {
-      return friendsData.map((item, index) => (
-        <TouchableOpacity
-          key={index}
-          style={styles.card}
-          onPress={() =>
-            navigation.navigate("ExpenseDetail", {
-              type: "friend",
-              name: item.name,
-              amount: item.amount,
-              youOwe: item.subtitle.toLowerCase().includes("you owe"),
-              entries: [
-                {
-                  title: "Car",
-                  by: item.name,
-                  amount: 500,
-                  date: "Nov 3, 2019",
-                  icon: "car",
-                },
-                {
-                  title: "Hotel",
-                  by: item.name,
-                  amount: 500,
-                  date: "Nov 3, 2019",
-                  icon: "hotel",
-                },
-                {
-                  title: "Food",
-                  by: item.name,
-                  amount: 500,
-                  date: "Nov 3, 2019",
-                  icon: "food",
-                },
-              ],
-            })
-          }
-        >
-          <View style={[styles.circleAvatar, { borderColor: item.color }]}>
-            <Text style={[styles.circleText, { color: item.color }]}>
-              {item.letter}
-            </Text>
-          </View>
-          <View style={styles.textContent}>
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-          </View>
-          <Text style={styles.amount}>{item.amount}</Text>
-        </TouchableOpacity>
-      ));
+      return (
+        <>
+          {friends.length === 0 && !loadingFriends ? (
+            <Text style={styles.emptyText}>No friends added yet.</Text>
+          ) : (
+            friends.map((friend, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.card}
+                onPress={() =>
+                  navigation.navigate("ExpenseDetail", {
+                    type: "friend",
+                    name: friend.name,
+                    amount: "$0",
+                    youOwe: false,
+                    entries: [],
+                  })
+                }
+              >
+                <View style={[styles.circleAvatar, { borderColor: "#4CAF50" }]}>
+                  <Text style={[styles.circleText, { color: "#4CAF50" }]}>
+                    {friend.name[0]}
+                  </Text>
+                </View>
+                <View style={styles.textContent}>
+                  <Text style={styles.cardTitle}>{friend.name}</Text>
+                  <Text style={styles.cardSubtitle}>{friend.phone}</Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </>
+      );
     }
 
     if (activeTab === "GROUPS") {
-      return groupsData.map((item, index) => (
+      return (
         <TouchableOpacity
-          key={index}
           style={styles.card}
-          onPress={() =>
-            navigation.navigate("SettleUpGroupSelect", {
-              groupName: item.title,
-            })
-          }
+          onPress={() => navigation.navigate("SettleUpGroupSelect")}
         >
-          {item.icon}
+          <FontAwesome5 name="mountain" size={24} color="#9FB3DF" />
           <View style={styles.textContent}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+            <Text style={styles.cardTitle}>Sample Group</Text>
+            <Text style={styles.cardSubtitle}>You owe John</Text>
           </View>
-          <Text style={styles.amount}>{item.amount}</Text>
+          <Text style={styles.amount}>$500</Text>
         </TouchableOpacity>
-      ));
+      );
     }
 
-    return activityData.map((item, index) => (
-      <View key={index} style={styles.card}>
-        {item.icon}
+    return (
+      <View style={styles.card}>
+        <Feather name="shopping-bag" size={24} color="#9FB3DF" />
         <View style={styles.textContent}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          {item.subtitle ? (
-            <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-          ) : null}
+          <Text style={styles.cardTitle}>Activity feed coming soon</Text>
         </View>
       </View>
-    ));
+    );
   };
 
   return (
@@ -199,7 +119,7 @@ const DashboardScreen = ({ route }) => {
           size={24}
           color="#FAFAFA"
           style={styles.menuIcon}
-          onPress={handleMenu}
+          onPress={() => Alert.alert("Menu")}
         />
         <Ionicons
           name="ellipsis-vertical"
@@ -213,19 +133,19 @@ const DashboardScreen = ({ route }) => {
         <Text style={styles.name}>{user.name}</Text>
       </View>
 
-      {/* Balance */}
+      {/* Balance Summary */}
       <View style={styles.balanceCard}>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>You are owed</Text>
-          <Text style={styles.balanceAmount}>$1500</Text>
+          <Text style={styles.balanceAmount}>$0</Text>
         </View>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>You owe</Text>
-          <Text style={styles.balanceAmount}>$750</Text>
+          <Text style={styles.balanceAmount}>$0</Text>
         </View>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceAmount}>$750</Text>
+          <Text style={styles.balanceAmount}>$0</Text>
         </View>
       </View>
 
@@ -245,13 +165,23 @@ const DashboardScreen = ({ route }) => {
         {renderContent()}
       </ScrollView>
 
-      {/* Floating Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate("NewTransaction")}
-      >
-        <Ionicons name="add" size={30} color="#FAFAFA" />
-      </TouchableOpacity>
+      {/* FAB Add Friend / Add Group */}
+      {activeTab === "FRIENDS" && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => navigation.navigate("AddFriend")}
+        >
+          <Ionicons name="person-add" size={30} color="#FAFAFA" />
+        </TouchableOpacity>
+      )}
+      {activeTab === "GROUPS" && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => navigation.navigate("CreateGroup")}
+        >
+          <Ionicons name="people" size={30} color="#FAFAFA" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -354,5 +284,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     elevation: 4,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#777",
+    textAlign: "center",
+    marginTop: 20,
   },
 });

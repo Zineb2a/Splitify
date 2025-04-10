@@ -106,12 +106,9 @@ const LoginScreen = () => {
           </Text>
         </Text>
 
-        <Text style={styles.or}>OR</Text>
 
-        {/* Google Sign In Button (UI only) */}
-        <TouchableOpacity style={styles.googleButton}>
-          <Text style={styles.googleText}>Sign in with Google</Text>
-        </TouchableOpacity>
+
+
       </View>
     </View>
   );

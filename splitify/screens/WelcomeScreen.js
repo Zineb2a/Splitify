@@ -20,8 +20,7 @@ const WelcomeScreen = () => {
           style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.title}>Welcome to Splitify</Text>
-        <Text style={styles.subtitle}>Split bills the easy way.</Text>
+
       </View>
 
       {/* Buttons */}
