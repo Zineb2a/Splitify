@@ -3,6 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import { signInWithEmailAndPassword } from "firebase/auth"; // Import Firebase sign-in method
 import { auth } from "../firebase"; // Import your Firebase configuration
 import { Alert } from "react-native";
+import { useUser } from "../UserContext";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 
 import {
@@ -18,6 +19,7 @@ const LoginScreen = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigation = useNavigation();
+  const { user, setUser } = useUser();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -40,8 +42,8 @@ const LoginScreen = () => {
 
       if (docSnap.exists()) {
         const userData = docSnap.data();
-        const userName = userData.name; // Get the name from the Firestore document
-        navigation.navigate("Dashboard", { userName });
+        setUser(userData); // Get the name from the Firestore document
+        navigation.navigate("Dashboard");
       } else {
         console.log("Error: User data not found.");
       }
