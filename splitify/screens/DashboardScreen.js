@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,88 +6,84 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-} from 'react-native';
+} from "react-native";
 import {
   Ionicons,
   FontAwesome5,
   MaterialIcons,
   Feather,
-} from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+} from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 
-const DashboardScreen = () => {
+const DashboardScreen = ({ route }) => {
   const navigation = useNavigation();
-  const [activeTab, setActiveTab] = useState('FRIENDS');
+  const [activeTab, setActiveTab] = useState("FRIENDS");
+
+  const { userName } = route.params;
 
   const friendsData = [
     {
-      letter: 'S',
-      name: 'Subodh Kolhe',
-      subtitle: 'You owe',
-      amount: '$500',
-      color: '#F44336',
+      letter: "S",
+      name: "Subodh Kolhe",
+      subtitle: "You owe",
+      amount: "$500",
+      color: "#F44336",
     },
     {
-      letter: 'S',
-      name: 'Shobhit Bakliwal',
-      subtitle: 'owes you',
-      amount: '$500',
-      color: '#4CAF50',
+      letter: "S",
+      name: "Shobhit Bakliwal",
+      subtitle: "owes you",
+      amount: "$500",
+      color: "#4CAF50",
     },
     {
-      letter: 'F',
-      name: 'Firasat Durrani',
-      subtitle: 'owes you',
-      amount: '$500',
-      color: '#4CAF50',
+      letter: "F",
+      name: "Firasat Durrani",
+      subtitle: "owes you",
+      amount: "$500",
+      color: "#4CAF50",
     },
     {
-      letter: 'S',
-      name: 'Sushil Kumar',
-      subtitle: 'You owe',
-      amount: '$500',
-      color: '#F44336',
+      letter: "S",
+      name: "Sushil Kumar",
+      subtitle: "You owe",
+      amount: "$500",
+      color: "#F44336",
     },
   ];
 
   const groupsData = [
     {
-      icon: (
-        <FontAwesome5 name="mountain" size={24} color="#9FB3DF" />
-      ),
-      title: 'Trip To Lonavala',
-      subtitle: 'You owe Shubham',
-      amount: '$500',
+      icon: <FontAwesome5 name="mountain" size={24} color="#9FB3DF" />,
+      title: "Trip To Lonavala",
+      subtitle: "You owe Shubham",
+      amount: "$500",
     },
     {
       icon: <FontAwesome5 name="film" size={24} color="#4CAF50" />,
-      title: 'Movie Night',
-      subtitle: 'Shobhit owes you',
-      amount: '$500',
+      title: "Movie Night",
+      subtitle: "Shobhit owes you",
+      amount: "$500",
     },
     {
-      icon: (
-        <MaterialIcons name="restaurant" size={24} color="#4CAF50" />
-      ),
-      title: 'Dinner at Canto',
-      subtitle: 'Firasat owes you',
-      amount: '$500',
+      icon: <MaterialIcons name="restaurant" size={24} color="#4CAF50" />,
+      title: "Dinner at Canto",
+      subtitle: "Firasat owes you",
+      amount: "$500",
     },
     {
-      icon: (
-        <FontAwesome5 name="campground" size={24} color="#F44336" />
-      ),
-      title: 'Trip To Matheran',
-      subtitle: 'You owe Sushil Kumar',
-      amount: '$500',
+      icon: <FontAwesome5 name="campground" size={24} color="#F44336" />,
+      title: "Trip To Matheran",
+      subtitle: "You owe Sushil Kumar",
+      amount: "$500",
     },
   ];
 
   const activityData = [
     {
       icon: <Feather name="shopping-bag" size={24} color="#9FB3DF" />,
-      title: 'You added Fries',
-      subtitle: 'Shobhit owes you',
+      title: "You added Fries",
+      subtitle: "Shobhit owes you",
     },
     {
       icon: <FontAwesome5 name="film" size={24} color="#4CAF50" />,
@@ -98,51 +94,49 @@ const DashboardScreen = () => {
       title: 'You added Shubham to the group "Trip To Lonavala"',
     },
     {
-      icon: (
-        <Ionicons name="checkmark-done" size={24} color="#F44336" />
-      ),
-      title: 'You settled with Sushil Kumar',
-      subtitle: 'You paid $500',
+      icon: <Ionicons name="checkmark-done" size={24} color="#F44336" />,
+      title: "You settled with Sushil Kumar",
+      subtitle: "You paid $500",
     },
   ];
 
   const handleMenu = () => {
-    Alert.alert('Menu', 'This will open the drawer later');
+    Alert.alert("Menu", "This will open the drawer later");
   };
 
   const renderContent = () => {
-    if (activeTab === 'FRIENDS') {
+    if (activeTab === "FRIENDS") {
       return friendsData.map((item, index) => (
         <TouchableOpacity
           key={index}
           style={styles.card}
           onPress={() =>
-            navigation.navigate('ExpenseDetail', {
-              type: 'friend',
+            navigation.navigate("ExpenseDetail", {
+              type: "friend",
               name: item.name,
               amount: item.amount,
-              youOwe: item.subtitle.toLowerCase().includes('you owe'),
+              youOwe: item.subtitle.toLowerCase().includes("you owe"),
               entries: [
                 {
-                  title: 'Car',
+                  title: "Car",
                   by: item.name,
                   amount: 500,
-                  date: 'Nov 3, 2019',
-                  icon: 'car',
+                  date: "Nov 3, 2019",
+                  icon: "car",
                 },
                 {
-                  title: 'Hotel',
+                  title: "Hotel",
                   by: item.name,
                   amount: 500,
-                  date: 'Nov 3, 2019',
-                  icon: 'hotel',
+                  date: "Nov 3, 2019",
+                  icon: "hotel",
                 },
                 {
-                  title: 'Food',
+                  title: "Food",
                   by: item.name,
                   amount: 500,
-                  date: 'Nov 3, 2019',
-                  icon: 'food',
+                  date: "Nov 3, 2019",
+                  icon: "food",
                 },
               ],
             })
@@ -162,13 +156,13 @@ const DashboardScreen = () => {
       ));
     }
 
-    if (activeTab === 'GROUPS') {
+    if (activeTab === "GROUPS") {
       return groupsData.map((item, index) => (
         <TouchableOpacity
           key={index}
           style={styles.card}
           onPress={() =>
-            navigation.navigate('SettleUpGroupSelect', {
+            navigation.navigate("SettleUpGroupSelect", {
               groupName: item.title,
             })
           }
@@ -214,9 +208,9 @@ const DashboardScreen = () => {
           style={styles.menuDots}
         />
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>Z</Text>
+          <Text style={styles.avatarText}>{userName[0]}</Text>
         </View>
-        <Text style={styles.name}>Zineb</Text>
+        <Text style={styles.name}>{userName}</Text>
       </View>
 
       {/* Balance */}
@@ -237,11 +231,9 @@ const DashboardScreen = () => {
 
       {/* Tabs */}
       <View style={styles.tabs}>
-        {['FRIENDS', 'GROUPS', 'ACTIVITY'].map((tab) => (
+        {["FRIENDS", "GROUPS", "ACTIVITY"].map((tab) => (
           <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}>
-            <Text
-              style={[styles.tab, activeTab === tab && styles.tabActive]}
-            >
+            <Text style={[styles.tab, activeTab === tab && styles.tabActive]}>
               {tab}
             </Text>
           </TouchableOpacity>
@@ -256,7 +248,7 @@ const DashboardScreen = () => {
       {/* Floating Button */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('NewTransaction')}
+        onPress={() => navigation.navigate("NewTransaction")}
       >
         <Ionicons name="add" size={30} color="#FAFAFA" />
       </TouchableOpacity>
@@ -267,54 +259,54 @@ const DashboardScreen = () => {
 export default DashboardScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFDF8' },
+  container: { flex: 1, backgroundColor: "#FFFDF8" },
   header: {
-    backgroundColor: '#9EC6F3',
+    backgroundColor: "#9EC6F3",
     paddingTop: 60,
     paddingBottom: 40,
-    alignItems: 'center',
-    position: 'relative',
+    alignItems: "center",
+    position: "relative",
   },
-  menuIcon: { position: 'absolute', top: 60, left: 20 },
-  menuDots: { position: 'absolute', top: 60, right: 20 },
+  menuIcon: { position: "absolute", top: 60, left: 20 },
+  menuDots: { position: "absolute", top: 60, right: 20 },
   avatar: {
-    backgroundColor: '#FFF1D5',
+    backgroundColor: "#FFF1D5",
     width: 80,
     height: 80,
     borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 12,
     borderWidth: 3,
-    borderColor: '#4CAF50',
+    borderColor: "#4CAF50",
   },
-  avatarText: { fontSize: 32, color: '#9EC6F3', fontWeight: 'bold' },
-  name: { fontSize: 16, color: '#FAFAFA', fontWeight: '500' },
+  avatarText: { fontSize: 32, color: "#9EC6F3", fontWeight: "bold" },
+  name: { fontSize: 16, color: "#FAFAFA", fontWeight: "500" },
   balanceCard: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    backgroundColor: "#fff",
     marginHorizontal: 16,
     marginTop: -30,
     borderRadius: 16,
     elevation: 3,
-    shadowColor: '#ccc',
+    shadowColor: "#ccc",
     padding: 16,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
-  balanceItem: { alignItems: 'center', flex: 1 },
-  balanceLabel: { fontSize: 13, color: '#666', marginBottom: 4 },
-  balanceAmount: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  balanceItem: { alignItems: "center", flex: 1 },
+  balanceLabel: { fontSize: 13, color: "#666", marginBottom: 4 },
+  balanceAmount: { fontSize: 18, fontWeight: "bold", color: "#333" },
   tabs: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
     marginTop: 24,
     marginBottom: 8,
   },
-  tab: { fontSize: 14, fontWeight: '500', color: '#999' },
+  tab: { fontSize: 14, fontWeight: "500", color: "#999" },
   tabActive: {
-    color: '#9EC6F3',
+    color: "#9EC6F3",
     borderBottomWidth: 2,
-    borderColor: '#9EC6F3',
+    borderColor: "#9EC6F3",
     paddingBottom: 4,
   },
   activityFeed: {
@@ -322,11 +314,11 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   card: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    backgroundColor: "#fff",
     padding: 12,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 12,
     elevation: 2,
     gap: 12,
@@ -336,31 +328,31 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   circleText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   textContent: { flex: 1 },
-  cardTitle: { fontSize: 14, fontWeight: '600', color: '#333' },
-  cardSubtitle: { fontSize: 13, color: '#777', marginTop: 2 },
+  cardTitle: { fontSize: 14, fontWeight: "600", color: "#333" },
+  cardSubtitle: { fontSize: 13, color: "#777", marginTop: 2 },
   amount: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   fab: {
-    position: 'absolute',
+    position: "absolute",
     right: 20,
     bottom: 30,
-    backgroundColor: '#9EC6F3',
+    backgroundColor: "#9EC6F3",
     width: 60,
     height: 60,
     borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     elevation: 4,
   },
 });
