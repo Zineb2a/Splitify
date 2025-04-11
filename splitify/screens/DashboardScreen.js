@@ -57,11 +57,11 @@ const DashboardScreen = () => {
       }
 
       const friendshipsRef = collection(db, "friendships");
-      const snapshot = await getDocs(friendshipsRef);
+      const friendshipSnapshot = await getDocs(friendshipsRef);
 
       const friendsList = [];
 
-      snapshot.docs.forEach((doc) => {
+      friendshipSnapshot.docs.forEach((doc) => {
         const data = doc.data();
 
         if (data) {
@@ -82,6 +82,32 @@ const DashboardScreen = () => {
       });
 
       setFriends(friendsList);
+      const expensesRef = collection(db, "expenses");
+      const expensesSnapshot = await getDocs(expensesRef);
+      // Filter expenses to exclude those related to deleted friends
+      const activePhones = friendsList.map(f => f.phone);
+      const filteredSnapshot = expensesSnapshot.docs.filter(doc => {
+        const data = doc.data();
+        return activePhones.includes(data.from) || activePhones.includes(data.to);
+      });
+      
+      let youOwe = 0;
+      let owedToYou = 0;
+      
+      filteredSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (!data.from || !data.to || typeof data.amount !== "number") return;
+      
+        if (data.from === user.phone && activePhones.includes(data.to)) {
+          youOwe += data.amount;
+        } else if (data.to === user.phone && activePhones.includes(data.from)) {
+          owedToYou += data.amount;
+        }
+      });
+      
+      setYouOweTotal(prev => prev + youOwe);
+      setOwedToYouTotal(prev => prev + owedToYou);
+      setTotalBalance(prev => prev + (owedToYou - youOwe));
     } catch (error) {
       console.error("Error loading friends:", error);
       setFriends([]);
@@ -124,6 +150,7 @@ const DashboardScreen = () => {
       }
 
       setGroups(groups);
+      loadBalances();
     } catch (error) {
       console.error("Error loading groups:", error);
       setGroups([]);
@@ -302,9 +329,23 @@ const DashboardScreen = () => {
                         await deleteDoc(doc.ref);
                       }
                     });
-                    loadFriends(); // Refresh the list
+
+                    // Delete all expenses between current user and this friend
+                    const expensesSnapshot = await getDocs(collection(db, "expenses"));
+                    expensesSnapshot.forEach(async (expenseDoc) => {
+                      const expense = expenseDoc.data();
+                      if (
+                        (expense.from === user.phone && expense.to === friend.phone) ||
+                        (expense.to === user.phone && expense.from === friend.phone)
+                      ) {
+                        await deleteDoc(expenseDoc.ref);
+                      }
+                    });
+
+                    await loadFriends();
+                    await loadBalances();
                   } catch (error) {
-                    console.error("Failed to remove friend:", error);
+                    console.error("Failed to remove friend and expenses:", error);
                   }
                 },
               },
@@ -361,6 +402,7 @@ const DashboardScreen = () => {
                         text: "OK",
                         onPress: () => {
                           loadGroups(); // Refresh group list
+                          loadBalances();
                         },
                       },
                     ]);
