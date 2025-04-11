@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons, FontAwesome5, Feather } from '@expo/vector-icons';
-import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useUser } from '../UserContext';
 
@@ -17,6 +17,23 @@ const formatPhoneNumber_1 = (phone) => {
 };
 
 const DashboardScreen = () => {
+  // Function to create a group expense activity log
+  const createGroupExpenseActivityLog = async (amount, reason, category, groupId, groupName, splits) => {
+    await addDoc(collection(db, "activityLogs"), {
+      actor: user.phone,
+      actorName: user.name,
+      type: "expense",
+      amount: parseFloat(amount),
+      reason,
+      category,
+      date: serverTimestamp(),
+      timestamp: serverTimestamp(),
+      description: `${user.name} added an expense in group ${groupName} for $${amount} (${category})`,
+      groupId: groupId,
+      groupName: groupName,
+      participants: [user.phone, ...splits.map(s => s.phone)]
+    });
+  };
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("FRIENDS");
   const { user } = useUser();
