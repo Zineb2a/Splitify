@@ -131,9 +131,16 @@ const CreateGroupScreen = () => {
     }
 
     try {
+      // Ensure current user is added to the group members
+      const updatedMembers = [...members];
+      const alreadyIncluded = members.some(m => m.phone === user.phone);
+      if (!alreadyIncluded) {
+        updatedMembers.push({ phone: user.phone, name: user.name });
+      }
+
       await addDoc(collection(db, "groups"), {
         name: groupName,
-        members,
+        members: updatedMembers,
         createdBy: user.uid,
         createdAt: Timestamp.now(),
       });
@@ -220,29 +227,6 @@ const CreateGroupScreen = () => {
         );
       })}
 
-      {/* friends.map((friend, idx) => (
-        <View key={idx} style={styles.memberChip}>
-          <Text style={styles.memberText}>
-            {friend.name} ({formatPhoneNumber(friend.phone)})
-          </Text>
-        </View>
-      )) */}
-      {/* If you choose from the user's friends (which are their contacts) not sure why we need this.
-          Adding a random phone number that isn't a friend doesn't seem like a good idea.
-      <Text style={styles.label}>Add Other Contact</Text>
-      <View style={styles.addRow}>
-        <TextInput
-          style={[styles.input, { flex: 1, marginRight: 8 }]}
-          placeholder="Enter phone number"
-          value={phoneInput}
-          onChangeText={setPhoneInput}
-          keyboardType="phone-pad"
-        />
-        <TouchableOpacity style={styles.addButton} onPress={handleAddContact}>
-          <Text style={styles.addButtonText}>Add</Text>
-        </TouchableOpacity>
-      </View> */}
-
       <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
         <Text style={styles.createText}>Create Group</Text>
       </TouchableOpacity>
@@ -286,20 +270,6 @@ const styles = StyleSheet.create({
     borderColor: "#ccc",
     borderWidth: 1,
     fontSize: 16,
-  },
-  addRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  addButton: {
-    backgroundColor: "#9EC6F3",
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-  },
-  addButtonText: {
-    color: "#FAFAFA",
-    fontWeight: "bold",
   },
   memberChip: {
     backgroundColor: "#eee",

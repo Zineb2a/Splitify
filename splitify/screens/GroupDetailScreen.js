@@ -9,8 +9,9 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useUser } from '../UserContext';
 
 const tabs = ['Expenses', 'Balances', 'Totals'];
 
@@ -18,24 +19,74 @@ const GroupDetailScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { groupId } = route.params;
+  const { user } = useUser();
 
   const [group, setGroup] = useState(null);
   const [activeTab, setActiveTab] = useState('Expenses');
 
   useEffect(() => {
+    if (!groupId) {
+      console.warn("Invalid groupId:", groupId);
+      return;
+    }
+
     const fetchGroup = async () => {
       try {
-        const ref = doc(db, 'groups', groupId);
+        console.log("Fetching group with ID:", groupId);
+        const ref = doc(db, 'groups', String(groupId));
         const snap = await getDoc(ref);
+        console.log("Fetched group snapshot:", snap.exists(), snap.data());
         if (snap.exists()) {
-          setGroup({ id: snap.id, ...snap.data() });
+          const data = snap.data();
+          const members = data.members || [];
+
+          const alreadyIncluded = members.some((m) => m.phone === user.phone);
+          const finalMembers = alreadyIncluded
+            ? members
+            : [...members, { phone: user.phone, name: user.name }];
+
+          setGroup({
+            id: snap.id,
+            expenses: data.expenses || [],
+            members: finalMembers,
+            groupName: data.groupName || data.name || 'Unnamed Group',
+          });
+        } else {
+          console.warn("Group not found for ID:", groupId);
         }
       } catch (err) {
         console.error('Error fetching group:', err);
       }
     };
+
     fetchGroup();
   }, [groupId]);
+
+  const fetchFriendDebts = async (friendsList) => {
+    try {
+      const transactionsRef = collection(db, 'transactions');
+      const snapshot = await getDocs(transactionsRef);
+      const allTransactions = snapshot.docs.map((doc) => doc.data());
+      const updated = friendsList.map((friend) => {
+        const relevant = allTransactions.filter(
+          (t) => t.to === friend.phone || t.from === friend.phone
+        );
+        let balance = 0;
+        relevant.forEach((t) => {
+          if (t.to === friend.phone) balance += t.amount;
+          if (t.from === friend.phone) balance -= t.amount;
+        });
+        return {
+          ...friend,
+          amount: Math.abs(balance).toFixed(2),
+          youOwe: balance < 0,
+        };
+      });
+      setFriends(updated);
+    } catch (err) {
+      console.error('Error calculating balances:', err);
+    }
+  };
 
   const handleLeaveGroup = async () => {
     Alert.alert('Leave Group', 'Are you sure you want to leave this group?', [
@@ -70,8 +121,12 @@ const GroupDetailScreen = () => {
   }
 
   const renderTabContent = () => {
+    if (!group || !group.expenses) {
+      return <Text style={styles.emptyText}>No data to display.</Text>;
+    }
+
     if (activeTab === 'Expenses') {
-      return group.expenses?.length ? (
+      return group.expenses.length ? (
         group.expenses.map((exp, idx) => (
           <View key={idx} style={styles.expenseCard}>
             <View style={styles.expenseHeader}>
@@ -90,21 +145,34 @@ const GroupDetailScreen = () => {
 
     if (activeTab === 'Balances') {
       const balances = {};
-      group.expenses?.forEach((e) => {
+
+      // Initialize all balances to 0 for all members
+      group.members.forEach((m) => {
+        balances[m.name] = 0;
+      });
+
+      group.expenses.forEach((e) => {
         const amount = parseFloat(e.amount) || 0;
         const splitAmount = amount / e.participants.length;
 
-        e.participants.forEach((p) => {
-          balances[p] = (balances[p] || 0) - splitAmount;
+        e.participants.forEach((phone) => {
+          const member = group.members.find((m) => m.phone === phone);
+          if (member) {
+            balances[member.name] = (balances[member.name] || 0) - splitAmount;
+          }
         });
-        balances[e.paidBy] = (balances[e.paidBy] || 0) + amount;
+
+        const payer = group.members.find((m) => m.phone === e.paidBy);
+        if (payer) {
+          balances[payer.name] = (balances[payer.name] || 0) + amount;
+        }
       });
 
       const keys = Object.keys(balances);
       if (!keys.length) return <Text style={styles.emptyText}>No balance info.</Text>;
 
-      return keys.map((k) => (
-        <View key={k} style={styles.balanceRow}>
+      return keys.map((k, index) => (
+        <View key={`${k}-${index}`} style={styles.balanceRow}>
           <Text style={styles.balanceName}>{k}</Text>
           <Text
             style={[
@@ -121,7 +189,7 @@ const GroupDetailScreen = () => {
     }
 
     if (activeTab === 'Totals') {
-      const total = group.expenses?.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+      const total = group.expenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
       return (
         <View>
           <Text style={styles.totalAmount}>Total Spent: ${total?.toFixed(2) || 0}</Text>
@@ -141,7 +209,7 @@ const GroupDetailScreen = () => {
         >
           <Ionicons name="arrow-back" size={24} color="#FAFAFA" />
         </TouchableOpacity>
-        <Text style={styles.groupName}>{group.groupName}</Text>
+        <Text style={styles.groupName}>{group.groupName || 'Unnamed Group'}</Text>
         <TouchableOpacity
           style={styles.menuIcon}
           onPress={() =>
@@ -158,11 +226,13 @@ const GroupDetailScreen = () => {
 
       {/* Members */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.membersBar}>
-        {group.members.map((m) => (
-          <View key={m} style={styles.memberBubble}>
-            <Text style={styles.memberText}>{m[0]}</Text>
+        {group.members?.length > 0 ? [...group.members.filter((m, i, arr) =>
+          arr.findIndex(a => a.phone === m.phone) === i
+        )].map((m, idx) => (
+          <View key={m.phone?.toString() || `member-${idx}`} style={styles.memberBubble}>
+            <Text style={styles.memberText}>{m.name?.[0] || "?"}</Text>
           </View>
-        ))}
+        )) : <Text style={styles.emptyText}>No members yet.</Text>}
       </ScrollView>
 
       {/* Tabs */}
@@ -178,6 +248,22 @@ const GroupDetailScreen = () => {
       <ScrollView contentContainerStyle={styles.contentContainer}>
         {renderTabContent()}
       </ScrollView>
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => {
+          if (group?.id) {
+            navigation.navigate("NewGroupExpense", {
+              groupId: group.id,
+              members: group.members,
+            });
+          } else {
+            Alert.alert("Error", "Group ID is missing.");
+          }
+        }}
+      >
+        <Ionicons name="add" size={30} color="#FAFAFA" />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -287,5 +373,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
     color: '#777',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 30,
+    backgroundColor: '#9EC6F3',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+  },
+  amount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
   },
 });

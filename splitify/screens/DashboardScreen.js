@@ -274,7 +274,7 @@ const DashboardScreen = () => {
           style={styles.card}
           onPress={() =>
             navigation.navigate("GroupDetail", {
-              groupId: index,
+              groupId: group.id,
               groupName: group.name,
               members: group.members,
             })
@@ -284,7 +284,7 @@ const DashboardScreen = () => {
           <View style={styles.textContent}>
             <Text style={styles.cardTitle}>{group.name}</Text>
             <Text style={styles.cardSubtitle}>
-              {(group.members?.length || 0) + 1} members
+              {group.members?.length || 0} members
             </Text>
           </View>
         </TouchableOpacity>

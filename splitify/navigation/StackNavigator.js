@@ -16,7 +16,7 @@ import NewExpenseGroup from "../screens/NewExpenseGroup";
 import ExpenseSuccessScreen from "../screens/ExpenseSuccessScreen";
 import AddFriendScreen from "../screens/AddFriendScreen";
 import CreateGroupScreen from '../screens/CreateGroupScreen';
-
+import GroupDetailScreen from "../screens/GroupDetailScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -35,6 +35,7 @@ const StackNavigator = () => {
       <Stack.Screen name="SettleUpSuccess" component={SettleUpSuccess} />
       <Stack.Screen name="AddFriend" component={AddFriendScreen} />
       <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
+      <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
       <Stack.Screen
         name="SettleUpGroupSelect"
         component={SettleUpGroupSelect}
@@ -43,7 +44,7 @@ const StackNavigator = () => {
       {/* Add Expense Flow */}
       <Stack.Screen name="NewTransaction" component={NewExpenseTypeScreen} />
       <Stack.Screen name="NewExpenseFriend" component={NewExpenseFriend} />
-      <Stack.Screen name="NewExpenseGroup" component={NewExpenseGroup} />
+      <Stack.Screen name="NewGroupExpense" component={NewExpenseGroup} />
       <Stack.Screen name="ExpenseSuccess" component={ExpenseSuccessScreen} />
     </Stack.Navigator>
   );
