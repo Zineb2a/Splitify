@@ -12,6 +12,7 @@ import { useNavigation } from "@react-navigation/native";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { normalizePhone } from "../utilities";
 
 const SignUpScreen = () => {
   const [name, setName] = useState("");
@@ -36,9 +37,10 @@ const SignUpScreen = () => {
       );
 
       await setDoc(doc(db, "users", userCredential.user.uid), {
+        uid: userCredential.user.uid,
         name,
         email,
-        phone, // ✅ Saving phone number to Firestore
+        phone: normalizePhone(phone), // ✅ Saving phone number to Firestore
         createdAt: new Date(),
       });
 
