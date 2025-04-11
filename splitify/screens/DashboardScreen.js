@@ -158,18 +158,21 @@ const DashboardScreen = () => {
         }
       });
 
-      // Fetch group expenses from each group document
+      // Fetch group expenses from each group document using real-time group subcollections
       const groupSnapshot = await getDocs(collection(db, "groups"));
-      groupSnapshot.forEach((groupDoc) => {
-        const groupData = groupDoc.data();
-        const expenses = groupData.expenses || [];
-
-        expenses.forEach((expense) => {
+  
+      for (const groupDoc of groupSnapshot.docs) {
+        const groupId = groupDoc.id;
+        const groupExpensesRef = collection(db, "groups", groupId, "expenses");
+        const expenseSnapshot = await getDocs(groupExpensesRef);
+  
+        expenseSnapshot.docs.forEach((doc) => {
+          const expense = doc.data();
           const splits = expense.splits || [];
-
+  
           splits.forEach((split) => {
             if (!split || isNaN(split.amount)) return;
-
+  
             if (split.phone === userPhone) {
               if (expense.paidBy !== userPhone) {
                 youOwe += split.amount;
@@ -179,7 +182,7 @@ const DashboardScreen = () => {
             }
           });
         });
-      });
+      }
 
       setYouOweTotal(youOwe);
       setOwedToYouTotal(owedToYou);
@@ -358,7 +361,9 @@ const DashboardScreen = () => {
             <Text style={styles.cardSubtitle}>
               {group.members?.length || 0} members
             </Text>
-            <Text style={styles.cardSubtitle}>{group.groupStatus}</Text>
+            <Text style={styles.cardSubtitle}>
+              Balance: {group.userBalance >= 0 ? '+' : ''}${group.userBalance.toFixed(2)}
+            </Text>
           </View>
         </TouchableOpacity>
       ));
@@ -422,15 +427,20 @@ const DashboardScreen = () => {
       <View style={styles.balanceCard}>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>You are owed</Text>
-          <Text style={styles.balanceAmount}>${owedToYouTotal}</Text>
+          <Text style={styles.balanceAmount}>+${owedToYouTotal.toFixed(2)}</Text>
         </View>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>You owe</Text>
-          <Text style={styles.balanceAmount}>${youOweTotal}</Text>
+          <Text style={styles.balanceAmount}>-${youOweTotal.toFixed(2)}</Text>
         </View>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceAmount}>${totalBalance}</Text>
+          <Text style={[
+            styles.balanceAmount,
+            { color: totalBalance >= 0 ? "#4CAF50" : "#F44336" }
+          ]}>
+            {totalBalance >= 0 ? "+" : "-"}${Math.abs(totalBalance).toFixed(2)}
+          </Text>
         </View>
       </View>
 
