@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   MaterialIcons,
   Feather,
 } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useUser } from "../UserContext";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
@@ -30,12 +30,54 @@ const DashboardScreen = () => {
 
   const loadFriends = async () => {
     try {
-      const friendsRef = collection(db, "users", user.uid, "friends");
-      const snapshot = await getDocs(friendsRef);
-      const loaded = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setFriends(loaded);
+      // Make sure we have the auth user ID
+      if (!user || !user.uid) {
+        console.error("No valid user.uid found:", user);
+        setFriends([]);
+        setLoadingFriends(false);
+        return;
+      }
+
+      // Get all friendships
+      const friendshipsRef = collection(db, "friendships");
+      const snapshot = await getDocs(friendshipsRef);
+
+      //console.log("Found friendships documents:", snapshot.size);
+
+      const friendsList = [];
+
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        //console.log("Processing friendship document:", doc.id, data);
+
+        if (data) {
+          const { user1, user2, metadata } = data;
+
+          // If current user is user1, add user2 as friend
+          if (user1 === user.phone && metadata && metadata[user2]) {
+            //console.log("Adding user2 as friend:", user2, metadata[user2]);
+            friendsList.push({
+              phone: user2,
+              name: metadata[user2].name || "Unknown",
+            });
+          }
+
+          // If current user is user2, add user1 as friend
+          else if (user2 === user.phone && metadata && metadata[user1]) {
+            //console.log("Adding user1 as friend:", user1, metadata[user1]);
+            friendsList.push({
+              phone: user1,
+              name: metadata[user1].name || "Unknown",
+            });
+          }
+        }
+      });
+
+      //console.log("Final friends list:", friendsList);
+      setFriends(friendsList);
     } catch (error) {
       console.error("Error loading friends:", error);
+      setFriends([]);
     } finally {
       setLoadingFriends(false);
     }
@@ -45,7 +87,10 @@ const DashboardScreen = () => {
     try {
       const groupsRef = collection(db, "users", user.uid, "groups");
       const snapshot = await getDocs(groupsRef);
-      const loaded = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const loaded = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
       setGroups(loaded);
     } catch (error) {
       console.error("Error loading groups:", error);
@@ -54,20 +99,47 @@ const DashboardScreen = () => {
     }
   };
 
+  // This will refresh data whenever the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      //console.log("Dashboard screen is focused, refreshing data");
+      if (user?.uid) {
+        setLoadingFriends(true);
+        setLoadingGroups(true);
+        loadFriends();
+        loadGroups();
+      }
+      return () => {
+        // Cleanup function if needed
+      };
+    }, [user])
+  );
+
+  // Initial load
   useEffect(() => {
-    loadFriends();
-    loadGroups();
-  }, []);
+    if (user?.uid) {
+      loadFriends();
+      loadGroups();
+    }
+  }, [user]);
 
   const renderContent = () => {
     if (activeTab === "FRIENDS") {
-      if (!loadingFriends && friends.length === 0) {
-        return <Text style={styles.emptyText}>No friends yet.</Text>;
+      if (loadingFriends) {
+        return <Text style={styles.emptyText}>Loading friends...</Text>;
+      }
+
+      if (friends.length === 0) {
+        return (
+          <Text style={styles.emptyText}>
+            No friends found. Your user phone: {user?.phone}
+          </Text>
+        );
       }
 
       return friends.map((friend, index) => (
         <TouchableOpacity
-          key={index}
+          key={`friend-${friend.phone}-${index}`}
           style={styles.card}
           onPress={() =>
             navigation.navigate("ExpenseDetail", {
@@ -93,13 +165,17 @@ const DashboardScreen = () => {
     }
 
     if (activeTab === "GROUPS") {
-      if (!loadingGroups && groups.length === 0) {
+      if (loadingGroups) {
+        return <Text style={styles.emptyText}>Loading groups...</Text>;
+      }
+
+      if (groups.length === 0) {
         return <Text style={styles.emptyText}>No groups yet.</Text>;
       }
 
       return groups.map((group, index) => (
         <TouchableOpacity
-          key={index}
+          key={`group-${group.id}-${index}`}
           style={styles.card}
           onPress={() =>
             navigation.navigate("GroupDetail", {
@@ -148,9 +224,9 @@ const DashboardScreen = () => {
           style={styles.menuDots}
         />
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user.name?.[0]}</Text>
+          <Text style={styles.avatarText}>{user?.name?.[0] || "?"}</Text>
         </View>
-        <Text style={styles.name}>{user.name}</Text>
+        <Text style={styles.name}>{user?.name || "User"}</Text>
       </View>
 
       {/* Balances */}
@@ -203,8 +279,6 @@ const DashboardScreen = () => {
           >
             <Ionicons name="people" size={30} color="#FAFAFA" />
           </TouchableOpacity>
-         
-          
         </>
       )}
     </View>
