@@ -10,11 +10,11 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useUser } from '../UserContext';
 
-const tabs = ['Expenses', 'Balances', 'Totals'];
+const tabs = ['Expenses', 'Balances', 'Totals', 'Activity'];
 
 const GroupDetailScreen = () => {
   const navigation = useNavigation();
@@ -53,11 +53,26 @@ const GroupDetailScreen = () => {
           const expensesList = expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           console.log("Fetched group expenses from subcollection:", expensesList);
 
+          // Fetch activity logs related to this group
+          const activityLogsRef = collection(db, 'activityLogs');
+          const activitySnapshot = await getDocs(activityLogsRef);
+          const groupLogs = activitySnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(log => {
+              if (!log.groupId) {
+                console.warn("Activity log missing groupId:", log);
+              }
+              return log.groupId === snap.id;
+            });
+
+          console.log("Fetched activity logs for group:", groupLogs);
+
           setGroup({
             id: snap.id,
             expenses: expensesList,
             members: finalMembers,
             groupName: data.groupName || data.name || 'Unnamed Group',
+            activityLogs: groupLogs,
           });
           console.log("Group expenses after setting state:", expensesList);
         } else {
@@ -138,7 +153,35 @@ const GroupDetailScreen = () => {
       console.log("Rendering group.expenses:", JSON.stringify(group.expenses, null, 2));
       return group.expenses.length ? (
         group.expenses.map((exp, idx) => (
-          <View key={exp.id || idx} style={styles.expenseCard}>
+          <TouchableOpacity
+            key={exp.id || idx}
+            style={styles.expenseCard}
+            onLongPress={() => {
+              Alert.alert(
+                'Delete Expense',
+                'Are you sure you want to delete this expense?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await deleteDoc(doc(db, 'groups', group.id, 'expenses', exp.id));
+                        setGroup(prev => ({
+                          ...prev,
+                          expenses: prev.expenses.filter(e => e.id !== exp.id),
+                        }));
+                      } catch (err) {
+                        console.error('Failed to delete expense:', err);
+                        Alert.alert('Error', 'Failed to delete expense.');
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+          >
             <View style={styles.expenseHeader}>
               <MaterialIcons name="receipt" size={20} color="#9FB3DF" />
               <Text style={styles.expenseTitle}>{exp.reason || 'Expense'}</Text>
@@ -163,7 +206,7 @@ const GroupDetailScreen = () => {
                 <Text style={styles.expenseDetail}>${s.amount}</Text>
               </View>
             ))}
-          </View>
+          </TouchableOpacity>
         ))
       ) : (
         <Text style={styles.emptyText}>No expenses yet.</Text>
@@ -224,7 +267,7 @@ const GroupDetailScreen = () => {
     if (activeTab === 'Totals') {
       const total = group.expenses.reduce((sum, e) => sum + parseFloat(e.total || 0), 0);
       const perMemberTotals = {};
-
+ 
       group.expenses.forEach((exp) => {
         (exp.splits || []).forEach((s) => {
           if (!perMemberTotals[s.name]) {
@@ -233,7 +276,7 @@ const GroupDetailScreen = () => {
           perMemberTotals[s.name] += s.amount;
         });
       });
-
+ 
       return (
         <View>
           <Text style={styles.totalAmount}>Total Spent: ${total.toFixed(2)}</Text>
@@ -245,8 +288,57 @@ const GroupDetailScreen = () => {
               </View>
             ))}
           </View>
+          <View style={{ marginTop: 24 }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>All Group Expenses:</Text>
+            {group.expenses.map((exp, idx) => (
+              <View key={exp.id || idx} style={styles.expenseCard}>
+                <View style={styles.expenseHeader}>
+                  <MaterialIcons name="receipt" size={20} color="#9FB3DF" />
+                  <Text style={styles.expenseTitle}>{exp.reason || 'Expense'}</Text>
+                </View>
+                <Text style={styles.expenseDetail}>Total: ${exp.total}</Text>
+                {exp.paidBy && (
+                  <Text style={styles.expenseDetail}>
+                    Paid by: <Text style={{ fontWeight: 'bold' }}>{exp.paidByName || exp.paidBy}</Text>
+                  </Text>
+                )}
+                {exp.date && (
+                  <Text style={styles.expenseDetail}>
+                    Date: {new Date(exp.date.seconds * 1000).toLocaleDateString()}
+                  </Text>
+                )}
+                {exp.splits && exp.splits.map((s, sIdx) => (
+                  <View
+                    key={`${exp.id}-split-${sIdx}`}
+                    style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 2 }}
+                  >
+                    <Text style={[styles.expenseDetail, { fontWeight: '500' }]}>{s.name}</Text>
+                    <Text style={styles.expenseDetail}>${s.amount}</Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
         </View>
       );
+    }
+
+    if (activeTab === 'Activity') {
+      console.log("Rendering activity logs:", group.activityLogs);
+      if (!group.activityLogs || !group.activityLogs.length) {
+        return <Text style={styles.emptyText}>No activity logs yet.</Text>;
+      }
+
+      return group.activityLogs.map((log, index) => (
+        <View key={log.id || index} style={styles.expenseCard}>
+          <Text style={styles.expenseDetail}>{log.description || 'No description'}</Text>
+          <Text style={styles.expenseDetail}>
+            {log.date?.seconds
+              ? new Date(log.date.seconds * 1000).toLocaleDateString()
+              : 'No date'}
+          </Text>
+        </View>
+      ));
     }
   };
 
@@ -284,34 +376,33 @@ const GroupDetailScreen = () => {
         ))}
       </View>
 
-      <View style={{ flex: 1 }}>
-        {/* Members */}
-        <FlatList
-          contentContainerStyle={[styles.membersBarList, { flexDirection: 'column' }]}
-          data={[...group.members.filter((m, i, arr) => arr.findIndex(a => a.phone === m.phone) === i)]}
-          keyExtractor={(item) => item.phone || Math.random().toString()}
-          renderItem={({ item }) => {
-            const totalOwed = group.expenses.reduce((sum, exp) => {
-              const split = exp.splits?.find(s => s.phone === item.phone);
-              return split ? sum + parseFloat(split.amount) : sum;
-            }, 0);
+      {/* Members */}
+      <View style={{ paddingHorizontal: 10, paddingVertical: 12 }}>
+        {group.members.filter((m, index, self) =>
+          m && m.phone &&
+          self.findIndex(other => other.phone === m.phone) === index
+        ).map((item) => {
+          const totalOwed = group.expenses.reduce((sum, exp) => {
+            const split = exp.splits?.find(s => s.phone === item.phone);
+            const parsed = parseFloat(split?.amount);
+            return split && !isNaN(parsed) ? sum + parsed : sum;
+          }, 0);
 
-            return (
-              <View style={styles.memberBarHorizontal}>
-                <View style={styles.memberNameBubble}>
-                  <Text style={styles.memberBarName}>{item.name}</Text>
-                </View>
-                <Text style={styles.memberBarAmount}>${totalOwed.toFixed(2)}</Text>
+          return (
+            <View key={item.phone} style={styles.memberBarHorizontal}>
+              <View style={styles.memberNameBubble}>
+                <Text style={styles.memberBarName}>{item.name}</Text>
               </View>
-            );
-          }}
-        />
-
-        {/* Tab Content */}
-        <ScrollView contentContainerStyle={styles.contentContainer}>
-          {renderTabContent()}
-        </ScrollView>
+              <Text style={styles.memberBarAmount}>${!isNaN(totalOwed) ? totalOwed.toFixed(2) : '0.00'}</Text>
+            </View>
+          );
+        })}
       </View>
+
+      {/* Scrollable Tab Content */}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+        {renderTabContent()}
+      </ScrollView>
 
       <TouchableOpacity
         style={styles.fab}
@@ -354,7 +445,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     backgroundColor: '#FFFDF8',
-    minHeight: 120,
+    maxHeight: 140,
   },
   memberBarHorizontal: {
     flexDirection: 'row',

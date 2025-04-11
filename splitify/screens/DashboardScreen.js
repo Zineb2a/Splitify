@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons, FontAwesome5, Feather } from '@expo/vector-icons';
-import { collection, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useUser } from '../UserContext';
 
@@ -22,9 +22,7 @@ const DashboardScreen = () => {
   const { user } = useUser();
 
   const [friends, setFriends] = useState([]);
-  const [groups, setGroups] = useState([
-    { name: "sdsds", members: [{ name: "sadsd", phone: "sdsd" }] },
-  ]);
+  const [groups, setGroups] = useState([]);
   const [loadingFriends, setLoadingFriends] = useState(true);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [youOweTotal, setYouOweTotal] = useState(0);
@@ -34,7 +32,6 @@ const DashboardScreen = () => {
 
   const loadFriends = async () => {
     try {
-      // Make sure we have the auth user ID
       if (!user || !user.uid) {
         console.error("No valid user.uid found:", user);
         setFriends([]);
@@ -42,7 +39,6 @@ const DashboardScreen = () => {
         return;
       }
 
-      // Get all friendships
       const friendshipsRef = collection(db, "friendships");
       const snapshot = await getDocs(friendshipsRef);
 
@@ -54,16 +50,12 @@ const DashboardScreen = () => {
         if (data) {
           const { user1, user2, metadata } = data;
 
-          // If current user is user1, add user2 as friend
           if (user1 === user.phone && metadata && metadata[user2]) {
             friendsList.push({
               phone: user2,
               name: metadata[user2].name || "Unknown",
             });
-          }
-
-          // If current user is user2, add user1 as friend
-          else if (user2 === user.phone && metadata && metadata[user1]) {
+          } else if (user2 === user.phone && metadata && metadata[user1]) {
             friendsList.push({
               phone: user1,
               name: metadata[user1].name || "Unknown",
@@ -94,17 +86,25 @@ const DashboardScreen = () => {
       const groupSnapshot = await getDocs(collection(db, "groups"));
       const groups = [];
 
-      groupSnapshot.forEach((doc) => {
+      for (const doc of groupSnapshot.docs) {
         const data = doc.data();
+        const members = (data.members || []).map(member =>
+          typeof member === 'string' ? { phone: member } : member
+        );
         const isCreator = data.createdBy === userId;
-        const isMember = (data.members || []).some(
+        const isMember = members.some(
           (member) => member.phone === userPhone
         );
 
         if (isCreator || isMember) {
-          groups.push({ id: doc.id, ...data });
+          const groupExpensesRef = collection(db, "groups", doc.id, "expenses");
+          const expenseSnapshot = await getDocs(groupExpensesRef);
+          const expenses = expenseSnapshot.docs.map(d => d.data());
+
+          const userBalance = calculateUserBalance(expenses, userPhone);
+          groups.push({ id: doc.id, ...data, members, expenses, userBalance });
         }
-      });
+      }
 
       setGroups(groups);
     } catch (error) {
@@ -115,22 +115,70 @@ const DashboardScreen = () => {
     }
   };
 
+  const calculateUserBalance = (expenses, userPhone) => {
+    let userBalance = 0;
+    expenses.forEach((expense) => {
+      if (expense.splits) {
+        expense.splits.forEach((split) => {
+          if (split.phone === userPhone) {
+            if (expense.paidBy === userPhone) {
+              // User paid but owes themselves => ignore
+            } else {
+              userBalance -= split.amount; // User owes this split
+            }
+          } else if (expense.paidBy && expense.paidBy === userPhone) {
+            userBalance += split.amount; // User paid and others owe
+          }
+        });
+      }
+    });
+    return userBalance;
+  };
+
   const loadBalances = async () => {
     try {
-      const expensesRef = collection(db, "expenses");
-      const snapshot = await getDocs(expensesRef);
+      const userPhone = user.phone;
+      const userId = user.uid;
+
       let youOwe = 0;
       let owedToYou = 0;
 
+      // Fetch individual expenses (friend-to-friend)
+      const expensesRef = collection(db, "expenses");
+      const snapshot = await getDocs(expensesRef);
+
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
-        if (!data.from || !data.to || !data.amount) return;
+        if (!data.from || !data.to || typeof data.amount !== "number") return;
 
-        if (data.from === user.phone) {
+        if (data.from === userPhone) {
           youOwe += data.amount;
-        } else if (data.to === user.phone) {
+        } else if (data.to === userPhone) {
           owedToYou += data.amount;
         }
+      });
+
+      // Fetch group expenses from each group document
+      const groupSnapshot = await getDocs(collection(db, "groups"));
+      groupSnapshot.forEach((groupDoc) => {
+        const groupData = groupDoc.data();
+        const expenses = groupData.expenses || [];
+
+        expenses.forEach((expense) => {
+          const splits = expense.splits || [];
+
+          splits.forEach((split) => {
+            if (!split || isNaN(split.amount)) return;
+
+            if (split.phone === userPhone) {
+              if (expense.paidBy !== userPhone) {
+                youOwe += split.amount;
+              }
+            } else if (expense.paidBy === userPhone) {
+              owedToYou += split.amount;
+            }
+          });
+        });
       });
 
       setYouOweTotal(youOwe);
@@ -145,23 +193,23 @@ const DashboardScreen = () => {
     try {
       const logsRef = collection(db, "activityLogs");
       const snapshot = await getDocs(logsRef);
-      const logs = snapshot.docs
-        .map((doc) => doc.data())
+      const rawLogs = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
         .filter(
           (log) =>
             log.actor === user.phone ||
             log.target === user.phone ||
-            log.participants?.includes(user.phone)
+            log.participants?.includes(user.phone) ||
+            (log.groupId && log.participants?.includes(user.phone))
         )
         .sort((a, b) => b.timestamp?.toMillis() - a.timestamp?.toMillis());
-      setActivityLogs(logs);
+      console.log("Loaded activity logs:", rawLogs);
+      setActivityLogs(rawLogs);
     } catch (error) {
       console.error("Failed to load activity logs:", error);
-      console.log("Loaded activity logs:", logs);
     }
   };
 
-  // This will refresh data whenever the screen comes into focus
   useFocusEffect(
     useCallback(() => {
       if (user?.uid) {
@@ -178,7 +226,6 @@ const DashboardScreen = () => {
     }, [user])
   );
 
-  // Initial load
   useEffect(() => {
     if (user?.uid) {
       loadFriends();
@@ -279,6 +326,31 @@ const DashboardScreen = () => {
               members: group.members,
             })
           }
+          onLongPress={() => {
+            Alert.alert("Leave Group", `Do you want to leave ${group.name}?`, [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Leave",
+                style: "destructive",
+                onPress: async () => {
+                  try {
+                    const groupRef = doc(db, "groups", group.id);
+                    await deleteDoc(groupRef);
+                    Alert.alert("Group Deleted", `${group.name} has been deleted.`, [
+                      {
+                        text: "OK",
+                        onPress: () => {
+                          loadGroups(); // Refresh group list
+                        },
+                      },
+                    ]);
+                  } catch (error) {
+                    console.error("Failed to delete group:", error);
+                  }
+                },
+              },
+            ]);
+          }}
         >
           <FontAwesome5 name="users" size={24} color="#9FB3DF" />
           <View style={styles.textContent}>
@@ -286,6 +358,7 @@ const DashboardScreen = () => {
             <Text style={styles.cardSubtitle}>
               {group.members?.length || 0} members
             </Text>
+            <Text style={styles.cardSubtitle}>{group.groupStatus}</Text>
           </View>
         </TouchableOpacity>
       ));
@@ -301,6 +374,9 @@ const DashboardScreen = () => {
           <Feather name="clock" size={24} color="#9FB3DF" />
           <View style={styles.textContent}>
             <Text style={styles.cardTitle}>{log.description}</Text>
+            {log.groupName && (
+              <Text style={styles.cardSubtitle}>Group: {log.groupName}</Text>
+            )}
             {log.timestamp && (
               <Text style={styles.cardSubtitle}>
                 {new Date(log.timestamp.toDate()).toLocaleString()}
@@ -323,7 +399,6 @@ const DashboardScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Ionicons
           name="menu"
@@ -344,7 +419,6 @@ const DashboardScreen = () => {
         <Text style={styles.name}>{user?.name || "User"}</Text>
       </View>
 
-      {/* Balances */}
       <View style={styles.balanceCard}>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>You are owed</Text>
@@ -360,7 +434,6 @@ const DashboardScreen = () => {
         </View>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabs}>
         {["FRIENDS", "GROUPS", "ACTIVITY"].map((tab) => (
           <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}>
@@ -371,12 +444,10 @@ const DashboardScreen = () => {
         ))}
       </View>
 
-      {/* Content */}
       <ScrollView contentContainerStyle={styles.activityFeed}>
         {renderContent()}
       </ScrollView>
 
-      {/* Floating Action Buttons */}
       {activeTab === "FRIENDS" && (
         <TouchableOpacity
           style={styles.fab}

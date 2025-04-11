@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useUser } from '../UserContext';
 import {
   View,
   Text,
@@ -21,6 +22,7 @@ import { collection, addDoc, Timestamp, getDoc, doc } from 'firebase/firestore';
 const NewExpenseGroup = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const { user } = useUser();
   const { groupId, groupName: initialGroupName, members: initialMembers = [] } = route.params || {};
 
   // Debug log: Check members passed from navigation
@@ -49,9 +51,15 @@ const NewExpenseGroup = () => {
       return;
     }
 
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid numeric amount.');
+      return;
+    }
+
     let splits = [];
     if (splitMode === 'equal') {
-      const perPerson = parseFloat(amount) / selectedMembers.length;
+      const perPerson = parsedAmount / selectedMembers.length;
       splits = selectedMembers.map((m) => ({
         name: m.name,
         phone: m.phone,
@@ -61,12 +69,12 @@ const NewExpenseGroup = () => {
       splits = selectedMembers.map((m) => ({
         name: m.name,
         phone: m.phone,
-        amount: parseFloat(customSplits[m.phone]) || 0,
+        amount: isNaN(parseFloat(customSplits[m.phone])) ? 0 : parseFloat(customSplits[m.phone]),
       }));
     }
 
     console.log('Adding expense:', {
-      total: parseFloat(amount),
+      total: parsedAmount,
       reason,
       date: Timestamp.fromDate(date),
       splits,
@@ -74,20 +82,29 @@ const NewExpenseGroup = () => {
 
     try {
       await addDoc(collection(db, 'groups', groupId, 'expenses'), {
-        total: parseFloat(amount),
+        total: parsedAmount,
         reason,
         date: Timestamp.fromDate(date),
         splits,
       });
 
       console.log('Adding activity log...');
+
       await addDoc(collection(db, 'groups', groupId, 'activityLogs'), {
         action: 'expense_added',
         reason,
-        total: parseFloat(amount),
+        total: parsedAmount,
+        splits,
         date: Timestamp.fromDate(date),
         createdAt: Timestamp.now(),
+        actor: user.phone,
+        actorName: user.name,
+        groupId,
+        groupName,
+        type: 'group_expense', // distinguish this
+        description: `${user.name} added a group expense in ${groupName} for $${parsedAmount} (${reason})`,
       });
+
       console.log('Activity log added successfully');
 
       // Optionally, you could add activity logging here
