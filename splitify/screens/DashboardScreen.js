@@ -17,6 +17,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useUser } from "../UserContext";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import { formatPhoneNumber_1 } from "../utilities";
 
 const DashboardScreen = () => {
   const navigation = useNavigation();
@@ -24,7 +25,9 @@ const DashboardScreen = () => {
   const { user } = useUser();
 
   const [friends, setFriends] = useState([]);
-  const [groups, setGroups] = useState([]);
+  const [groups, setGroups] = useState([
+    { name: "sdsds", members: [{ name: "sadsd", phone: "sdsd" }] },
+  ]);
   const [loadingFriends, setLoadingFriends] = useState(true);
   const [loadingGroups, setLoadingGroups] = useState(true);
 
@@ -85,15 +88,33 @@ const DashboardScreen = () => {
 
   const loadGroups = async () => {
     try {
-      const groupsRef = collection(db, "users", user.uid, "groups");
-      const snapshot = await getDocs(groupsRef);
-      const loaded = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setGroups(loaded);
+      const userPhone = user.phone;
+      const userId = user.uid;
+
+      if (!userId || !userPhone) {
+        console.error("User not authenticated or missing phone number");
+        return [];
+      }
+
+      const groupSnapshot = await getDocs(collection(db, "groups"));
+      const groups = [];
+
+      groupSnapshot.forEach((doc) => {
+        const data = doc.data();
+        const isCreator = data.createdBy === userId;
+        const isMember = (data.members || []).some(
+          (member) => member.phone === userPhone
+        );
+
+        if (isCreator || isMember) {
+          groups.push({ id: doc.id, ...data });
+        }
+      });
+
+      setGroups(groups);
     } catch (error) {
       console.error("Error loading groups:", error);
+      setGroups([]);
     } finally {
       setLoadingGroups(false);
     }
@@ -132,7 +153,8 @@ const DashboardScreen = () => {
       if (friends.length === 0) {
         return (
           <Text style={styles.emptyText}>
-            No friends found. Your user phone: {user?.phone}
+            No friends found. Your user phone:{" "}
+            {formatPhoneNumber_1(user?.phone)}
           </Text>
         );
       }
@@ -158,7 +180,9 @@ const DashboardScreen = () => {
           </View>
           <View style={styles.textContent}>
             <Text style={styles.cardTitle}>{friend.name}</Text>
-            <Text style={styles.cardSubtitle}>{friend.phone}</Text>
+            <Text style={styles.cardSubtitle}>
+              {formatPhoneNumber_1(friend.phone)}
+            </Text>
           </View>
         </TouchableOpacity>
       ));
@@ -175,11 +199,11 @@ const DashboardScreen = () => {
 
       return groups.map((group, index) => (
         <TouchableOpacity
-          key={`group-${group.id}-${index}`}
+          key={`group-${index}`}
           style={styles.card}
           onPress={() =>
             navigation.navigate("GroupDetail", {
-              groupId: group.id,
+              groupId: index,
               groupName: group.name,
               members: group.members,
             })
@@ -189,7 +213,7 @@ const DashboardScreen = () => {
           <View style={styles.textContent}>
             <Text style={styles.cardTitle}>{group.name}</Text>
             <Text style={styles.cardSubtitle}>
-              {group.members?.length || 0} members
+              {(group.members?.length || 0) + 1} members
             </Text>
           </View>
         </TouchableOpacity>

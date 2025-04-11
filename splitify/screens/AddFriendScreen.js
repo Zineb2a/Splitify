@@ -22,7 +22,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { useUser } from "../UserContext";
-import { normalizePhone } from "../utilities";
+import { normalizePhone, formatPhoneNumber_1 } from "../utilities";
 
 const AddFriendScreen = () => {
   const [contacts, setContacts] = useState([]);
@@ -160,7 +160,9 @@ const AddFriendScreen = () => {
           >
             <View>
               <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.number}>{item.number}</Text>
+              <Text style={styles.number}>
+                {formatPhoneNumber_1(item.number)}
+              </Text>
             </View>
             <Ionicons name="person-add" size={20} color="#9EC6F3" />
           </TouchableOpacity>
