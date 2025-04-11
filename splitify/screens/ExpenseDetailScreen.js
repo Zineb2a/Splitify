@@ -49,34 +49,31 @@ const ExpenseDetailScreen = () => {
 
   const fetchExpenses = async () => {
     try {
+      console.log("Running fetchExpenses for phone:", phone);
       const q = query(
         collection(db, 'expenses'),
-        where('participants', 'array-contains', user.phone)
+        where('participants', 'array-contains', phone)
       );
       const snapshot = await getDocs(q);
-      const results = snapshot.docs
-        .map((doc) => {
-          const data = doc.data();
-          const involvesFriend =
-            data.participants &&
-            data.participants.includes(user.phone) &&
-            data.participants.includes(phone);
-
-          if (!involvesFriend) return null;
-
-          return {
-            id: doc.id,
-            reason: data.reason || 'No description',
-            amount: data.amount || 0,
-            date: data.date || new Date(),
-            icon: data.category?.toLowerCase() || 'default',
-          };
-        })
-        .filter(Boolean);
+      console.log("Fetched documents:", snapshot.size);
+      snapshot.docs.forEach(doc => console.log(doc.id, doc.data()));
+      const results = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          reason: data.reason || 'No description',
+          amount: data.amount || 0,
+          date: data.date?.toDate() || new Date(),
+          icon: data.category?.toLowerCase() || 'default',
+        };
+      });
+      console.log("Mapped results:", results);
+      console.log('Fetched expenses:', results);
       setEntries(results);
       const total = results.reduce((sum, item) => sum + (item.amount || 0), 0);
       setTotalAmount(total);
     } catch (error) {
+      console.log('Fetch expenses error:', error);
       console.error('Error fetching expenses:', error);
     }
   };
@@ -89,7 +86,7 @@ const ExpenseDetailScreen = () => {
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteDoc(doc(db, 'users', user.uid, 'expenses', entryId));
+            await deleteDoc(doc(db, 'expenses', entryId));
             setEntries((prev) => prev.filter((item) => item.id !== entryId));
           } catch (err) {
             Alert.alert('Error', 'Failed to delete expense.');
@@ -102,14 +99,20 @@ const ExpenseDetailScreen = () => {
 
   useEffect(() => {
     if (user?.uid && phone) {
-      fetchExpenses();
+      console.log('Triggering fetchExpenses...');
+      fetchExpenses().then(() => {
+        console.log('Finished fetching expenses.');
+      });
     }
   }, [user, phone]);
 
   useFocusEffect(
     useCallback(() => {
       if (user?.uid && phone) {
-        fetchExpenses();
+        console.log('Triggering fetchExpenses...');
+        fetchExpenses().then(() => {
+          console.log('Finished fetching expenses.');
+        });
       }
     }, [user, phone])
   );
@@ -167,25 +170,34 @@ const ExpenseDetailScreen = () => {
 
       {/* Expenses List */}
       <ScrollView contentContainerStyle={styles.entriesContainer}>
-        {entries.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={styles.card}
-            onLongPress={() => handleDeleteEntry(item.id)}
-          >
-            {iconMap[item.icon?.toLowerCase()] || iconMap.default}
-            <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>{item.reason}</Text>
-              <Text style={styles.cardSubtitle}>Added by You</Text>
-            </View>
-            <View style={styles.cardRight}>
-              <Text style={styles.cardDate}>
-                {item.date?.toDate().toISOString().split('T')[0]}
-              </Text>
-              <Text style={styles.cardAmount}>${item.amount}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+        {entries.length === 0 && (
+          <Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>
+            No expenses found for this contact.
+          </Text>
+        )}
+        {entries.map((item) => {
+          console.log("Rendering entry:", item);
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.card}
+              onLongPress={() => handleDeleteEntry(item.id)}
+            >
+              {(iconMap[item.icon?.toLowerCase()] || iconMap.default)}
+              <View style={styles.cardText}>
+                <Text style={styles.cardTitle}>{item.reason}</Text>
+                <Text style={styles.cardSubtitle}>Added by You</Text>
+              </View>
+              <View style={styles.cardRight}>
+                <Text style={styles.cardDate}>
+                  {item.date?.toISOString().split('T')[0]}
+                </Text>
+                <Text style={styles.cardAmount}>${item.amount}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+        {console.log("Rendering entries:", entries)}
       </ScrollView>
 
       {/* Floating Button */}

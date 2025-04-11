@@ -22,6 +22,8 @@ import {
   addDoc,
   getDocs,
   Timestamp,
+  doc,
+  updateDoc,
 } from 'firebase/firestore';
 
 const BottomSelect = ({ visible, items, onClose, onSelect }) => (
@@ -141,6 +143,17 @@ const NewExpenseFriend = () => {
       Alert.alert('Please enter a valid amount.');
       return;
     }
+
+    console.log('Submitting expense with:', {
+      from: user.phone,
+      fromName: user.name,
+      to: selectedFriend.phone,
+      toName: selectedFriend.name,
+      category: selectedCategory,
+      amount: parsedAmount,
+      reason,
+      date: date.toISOString(),
+    });
   
     try {
       await addDoc(collection(db, 'transactions'), {
@@ -155,6 +168,7 @@ const NewExpenseFriend = () => {
         status: 'unpaid',
         createdAt: Timestamp.now(),
       });
+      console.log('Added to transactions');
       await addDoc(collection(db, 'expenses'), {
         participants: [user.phone, selectedFriend.phone],
         from: user.phone,
@@ -168,6 +182,59 @@ const NewExpenseFriend = () => {
         status: 'unpaid',
         createdAt: Timestamp.now(),
       });
+      console.log('Added to expenses');
+      
+      await addDoc(collection(db, 'activityLogs'), {
+        type: 'expense',
+        actor: user.phone,
+        actorName: user.name,
+        target: selectedFriend.phone,
+        targetName: selectedFriend.name,
+        amount: parsedAmount,
+        category: selectedCategory,
+        reason,
+        date: Timestamp.fromDate(date),
+        createdAt: Timestamp.now(),
+        description: `${user.name} added an expense with ${selectedFriend.name} for $${parsedAmount} (${selectedCategory})`,
+      });
+
+      // Update owes/owedBy balances
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      let friendUid = null;
+      usersSnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.phone === selectedFriend.phone) {
+          friendUid = docSnap.id;
+        }
+      });
+
+      console.log('Friend UID:', friendUid);
+      if (!friendUid) {
+        console.warn('No matching user found for selected friend phone:', selectedFriend.phone);
+      }
+
+      if (friendUid) {
+        const friendRef = doc(db, 'users', friendUid);
+        const userRef = doc(db, 'users', user.uid);
+        const increment = (value) => ({
+          [`owes.${user.phone}`]: (firebase.firestore.FieldValue.increment
+            ? firebase.firestore.FieldValue.increment(value)
+            : value),
+        });
+        const incrementOwed = (value) => ({
+          [`owedBy.${selectedFriend.phone}`]: (firebase.firestore.FieldValue.increment
+            ? firebase.firestore.FieldValue.increment(value)
+            : value),
+        });
+
+        await updateDoc(friendRef, {
+          [`owes.${user.phone}`]: parsedAmount,
+        });
+
+        await updateDoc(userRef, {
+          [`owedBy.${selectedFriend.phone}`]: parsedAmount,
+        });
+      }
   
       navigation.navigate('ExpenseSuccess');
     } catch (error) {

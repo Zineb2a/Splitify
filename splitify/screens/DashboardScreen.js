@@ -1,23 +1,20 @@
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
-import {
-  Ionicons,
-  FontAwesome5,
-  MaterialIcons,
-  Feather,
-} from "@expo/vector-icons";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import { useUser } from "../UserContext";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
-import { formatPhoneNumber_1 } from "../utilities";
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Ionicons, FontAwesome5, Feather } from '@expo/vector-icons';
+import { collection, getDocs, deleteDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useUser } from '../UserContext';
+
+const formatPhoneNumber_1 = (phone) => {
+  if (!phone) return "";
+  const cleaned = ("" + phone).replace(/\D/g, "");
+  const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+  if (match) {
+    return `(${match[1]}) ${match[2]}-${match[3]}`;
+  }
+  return phone;
+};
 
 const DashboardScreen = () => {
   const navigation = useNavigation();
@@ -30,6 +27,10 @@ const DashboardScreen = () => {
   ]);
   const [loadingFriends, setLoadingFriends] = useState(true);
   const [loadingGroups, setLoadingGroups] = useState(true);
+  const [youOweTotal, setYouOweTotal] = useState(0);
+  const [owedToYouTotal, setOwedToYouTotal] = useState(0);
+  const [totalBalance, setTotalBalance] = useState(0);
+  const [activityLogs, setActivityLogs] = useState([]);
 
   const loadFriends = async () => {
     try {
@@ -45,20 +46,16 @@ const DashboardScreen = () => {
       const friendshipsRef = collection(db, "friendships");
       const snapshot = await getDocs(friendshipsRef);
 
-      //console.log("Found friendships documents:", snapshot.size);
-
       const friendsList = [];
 
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
-        //console.log("Processing friendship document:", doc.id, data);
 
         if (data) {
           const { user1, user2, metadata } = data;
 
           // If current user is user1, add user2 as friend
           if (user1 === user.phone && metadata && metadata[user2]) {
-            //console.log("Adding user2 as friend:", user2, metadata[user2]);
             friendsList.push({
               phone: user2,
               name: metadata[user2].name || "Unknown",
@@ -67,7 +64,6 @@ const DashboardScreen = () => {
 
           // If current user is user2, add user1 as friend
           else if (user2 === user.phone && metadata && metadata[user1]) {
-            //console.log("Adding user1 as friend:", user1, metadata[user1]);
             friendsList.push({
               phone: user1,
               name: metadata[user1].name || "Unknown",
@@ -76,7 +72,6 @@ const DashboardScreen = () => {
         }
       });
 
-      //console.log("Final friends list:", friendsList);
       setFriends(friendsList);
     } catch (error) {
       console.error("Error loading friends:", error);
@@ -120,15 +115,62 @@ const DashboardScreen = () => {
     }
   };
 
+  const loadBalances = async () => {
+    try {
+      const expensesRef = collection(db, "expenses");
+      const snapshot = await getDocs(expensesRef);
+      let youOwe = 0;
+      let owedToYou = 0;
+
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        if (!data.from || !data.to || !data.amount) return;
+
+        if (data.from === user.phone) {
+          youOwe += data.amount;
+        } else if (data.to === user.phone) {
+          owedToYou += data.amount;
+        }
+      });
+
+      setYouOweTotal(youOwe);
+      setOwedToYouTotal(owedToYou);
+      setTotalBalance(owedToYou - youOwe);
+    } catch (error) {
+      console.error("Failed to calculate balances:", error);
+    }
+  };
+
+  const loadActivityLogs = async () => {
+    try {
+      const logsRef = collection(db, "activityLogs");
+      const snapshot = await getDocs(logsRef);
+      const logs = snapshot.docs
+        .map((doc) => doc.data())
+        .filter(
+          (log) =>
+            log.actor === user.phone ||
+            log.target === user.phone ||
+            log.participants?.includes(user.phone)
+        )
+        .sort((a, b) => b.timestamp?.toMillis() - a.timestamp?.toMillis());
+      setActivityLogs(logs);
+    } catch (error) {
+      console.error("Failed to load activity logs:", error);
+      console.log("Loaded activity logs:", logs);
+    }
+  };
+
   // This will refresh data whenever the screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      //console.log("Dashboard screen is focused, refreshing data");
       if (user?.uid) {
         setLoadingFriends(true);
         setLoadingGroups(true);
         loadFriends();
         loadGroups();
+        loadBalances();
+        loadActivityLogs();
       }
       return () => {
         // Cleanup function if needed
@@ -141,6 +183,8 @@ const DashboardScreen = () => {
     if (user?.uid) {
       loadFriends();
       loadGroups();
+      loadBalances();
+      loadActivityLogs();
     }
   }, [user]);
 
@@ -167,11 +211,38 @@ const DashboardScreen = () => {
             navigation.navigate("ExpenseDetail", {
               type: "friend",
               name: friend.name,
+              phone: friend.phone,
               amount: "$0",
               youOwe: false,
               entries: [],
             })
           }
+          onLongPress={() => {
+            Alert.alert("Remove Friend", `Do you want to remove ${friend.name}?`, [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Remove",
+                style: "destructive",
+                onPress: async () => {
+                  try {
+                    const snapshot = await getDocs(collection(db, "friendships"));
+                    snapshot.forEach(async (doc) => {
+                      const data = doc.data();
+                      if (
+                        (data.user1 === user.phone && data.user2 === friend.phone) ||
+                        (data.user2 === user.phone && data.user1 === friend.phone)
+                      ) {
+                        await deleteDoc(doc.ref);
+                      }
+                    });
+                    loadFriends(); // Refresh the list
+                  } catch (error) {
+                    console.error("Failed to remove friend:", error);
+                  }
+                },
+              },
+            ]);
+          }}
         >
           <View style={[styles.circleAvatar, { borderColor: "#4CAF50" }]}>
             <Text style={[styles.circleText, { color: "#4CAF50" }]}>
@@ -220,6 +291,26 @@ const DashboardScreen = () => {
       ));
     }
 
+    if (activeTab === "ACTIVITY") {
+      if (activityLogs.length === 0) {
+        return <Text style={styles.emptyText}>No recent activity yet.</Text>;
+      }
+      console.log("Rendering activity logs:", activityLogs);
+      return activityLogs.map((log, index) => (
+        <View key={`log-${index}`} style={styles.card}>
+          <Feather name="clock" size={24} color="#9FB3DF" />
+          <View style={styles.textContent}>
+            <Text style={styles.cardTitle}>{log.description}</Text>
+            {log.timestamp && (
+              <Text style={styles.cardSubtitle}>
+                {new Date(log.timestamp.toDate()).toLocaleString()}
+              </Text>
+            )}
+          </View>
+        </View>
+      ));
+    }
+
     return (
       <View style={styles.card}>
         <Feather name="clock" size={24} color="#9FB3DF" />
@@ -257,15 +348,15 @@ const DashboardScreen = () => {
       <View style={styles.balanceCard}>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>You are owed</Text>
-          <Text style={styles.balanceAmount}>$0</Text>
+          <Text style={styles.balanceAmount}>${owedToYouTotal}</Text>
         </View>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>You owe</Text>
-          <Text style={styles.balanceAmount}>$0</Text>
+          <Text style={styles.balanceAmount}>${youOweTotal}</Text>
         </View>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceAmount}>$0</Text>
+          <Text style={styles.balanceAmount}>${totalBalance}</Text>
         </View>
       </View>
 

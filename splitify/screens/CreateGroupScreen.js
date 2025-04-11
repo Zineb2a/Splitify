@@ -145,6 +145,32 @@ const CreateGroupScreen = () => {
     }
   };
 
+  const handleAddGroupExpense = async (groupId, payerPhone, splitBetween, amount, category, reason, date = new Date()) => {
+    try {
+      if (!groupId || !payerPhone || !splitBetween || !amount || !category || !reason) {
+        Alert.alert("Missing Fields", "Please fill all required fields for the expense.");
+        return;
+      }
+
+      const expenseData = {
+        groupId,
+        payerPhone,
+        splitBetween,
+        amount,
+        category,
+        reason,
+        date: Timestamp.fromDate(date),
+        createdAt: Timestamp.now(),
+      };
+
+      await addDoc(collection(db, "group_expenses"), expenseData);
+      Alert.alert("Success", "Expense added successfully.");
+    } catch (error) {
+      console.error("Error adding group expense:", error);
+      Alert.alert("Error", "Could not add group expense.");
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       {/* Header with back arrow */}

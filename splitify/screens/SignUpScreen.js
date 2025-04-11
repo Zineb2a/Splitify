@@ -42,6 +42,8 @@ const SignUpScreen = () => {
         email,
         phone: normalizePhone(phone), // ✅ Saving phone number to Firestore
         createdAt: new Date(),
+        owes: {}, // ✅ Initialize debts the user owes to others
+        owedBy: {}, // ✅ Initialize debts others owe to the user
       });
 
       navigation.navigate("Login");
