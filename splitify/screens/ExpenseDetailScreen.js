@@ -24,6 +24,7 @@ import {
   doc,
 } from 'firebase/firestore';
 import { useUser } from '../UserContext';
+import * as SMS from 'expo-sms';
 
 const ExpenseDetailScreen = () => {
   const navigation = useNavigation();
@@ -97,6 +98,23 @@ const ExpenseDetailScreen = () => {
     ]);
   };
 
+  const handleSendReminder = async () => {
+    if (!phone || !name || totalAmount === 0) {
+      Alert.alert('Cannot send reminder', 'Missing information or no amount owed.');
+      return;
+    }
+
+    const isAvailable = await SMS.isAvailableAsync();
+    if (!isAvailable) {
+      Alert.alert('SMS Not Supported', 'This device does not support sending SMS.');
+      return;
+    }
+
+    const message = `Hi ${name}, just a quick reminder from Splitify 💸\n\nYou currently owe me $${totalAmount.toFixed(2)} for our shared expenses. I'd appreciate it if you could settle up when possible.\n\nThanks!\n- ${user?.name}`;
+    const { result } = await SMS.sendSMSAsync([phone], message);
+    console.log('SMS send result:', result);
+  };
+
   useEffect(() => {
     if (user?.uid && phone) {
       console.log('Triggering fetchExpenses...');
@@ -160,7 +178,10 @@ const ExpenseDetailScreen = () => {
             <Text style={styles.buttonOutlineText}>Settle Up</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.buttonFill}>
+          <TouchableOpacity
+            style={styles.buttonFill}
+            onPress={handleSendReminder}
+          >
             <Text style={styles.buttonFillText}>
               {type === 'friend' ? 'Send Reminder' : 'Balances'}
             </Text>
