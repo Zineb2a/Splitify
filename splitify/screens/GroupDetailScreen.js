@@ -38,6 +38,7 @@ const GroupDetailScreen = () => {
         console.log("Fetched group snapshot:", snap.exists(), snap.data());
         if (snap.exists()) {
           const data = snap.data();
+          console.log("Loaded group data:", data);
           const members = data.members || [];
 
           const alreadyIncluded = members.some((m) => m.phone === user.phone);
@@ -45,12 +46,19 @@ const GroupDetailScreen = () => {
             ? members
             : [...members, { phone: user.phone, name: user.name }];
 
+          // Fetch expenses subcollection for this group
+          const expensesRef = collection(db, 'groups', snap.id, 'expenses');
+          const expensesSnap = await getDocs(expensesRef);
+          const expensesList = expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          console.log("Fetched group expenses from subcollection:", expensesList);
+
           setGroup({
             id: snap.id,
-            expenses: data.expenses || [],
+            expenses: expensesList,
             members: finalMembers,
             groupName: data.groupName || data.name || 'Unnamed Group',
           });
+          console.log("Group expenses after setting state:", expensesList);
         } else {
           console.warn("Group not found for ID:", groupId);
         }
@@ -126,16 +134,34 @@ const GroupDetailScreen = () => {
     }
 
     if (activeTab === 'Expenses') {
+      console.log("Rendering group.expenses:", JSON.stringify(group.expenses, null, 2));
       return group.expenses.length ? (
         group.expenses.map((exp, idx) => (
-          <View key={idx} style={styles.expenseCard}>
+          <View key={exp.id || idx} style={styles.expenseCard}>
             <View style={styles.expenseHeader}>
               <MaterialIcons name="receipt" size={20} color="#9FB3DF" />
-              <Text style={styles.expenseTitle}>{exp.title}</Text>
+              <Text style={styles.expenseTitle}>{exp.reason || 'Expense'}</Text>
             </View>
-            <Text style={styles.expenseDetail}>
-              Paid by {exp.paidBy} - ${exp.amount}
-            </Text>
+            <Text style={styles.expenseDetail}>Total: ${exp.total}</Text>
+            {exp.paidBy && (
+              <Text style={styles.expenseDetail}>
+                Paid by: <Text style={{ fontWeight: 'bold' }}>{exp.paidByName || exp.paidBy}</Text>
+              </Text>
+            )}
+            {exp.date && (
+              <Text style={styles.expenseDetail}>
+                Date: {new Date(exp.date.seconds * 1000).toLocaleDateString()}
+              </Text>
+            )}
+            {exp.splits && exp.splits.map((s, sIdx) => (
+              <View
+                key={`${exp.id}-split-${sIdx}`}
+                style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 2 }}
+              >
+                <Text style={[styles.expenseDetail, { fontWeight: '500' }]}>{s.name}</Text>
+                <Text style={styles.expenseDetail}>${s.amount}</Text>
+              </View>
+            ))}
           </View>
         ))
       ) : (
@@ -146,43 +172,49 @@ const GroupDetailScreen = () => {
     if (activeTab === 'Balances') {
       const balances = {};
 
-      // Initialize all balances to 0 for all members
+      // Initialize all balances to 0 for each member
       group.members.forEach((m) => {
-        balances[m.name] = 0;
+        balances[m.phone] = { name: m.name, amount: 0 };
       });
 
-      group.expenses.forEach((e) => {
-        const amount = parseFloat(e.amount) || 0;
-        const splitAmount = amount / e.participants.length;
+      group.expenses.forEach((expense) => {
+        const payer = expense.paidBy || user.phone; // fallback to current user if undefined
+        const total = parseFloat(expense.total || 0);
+        const splits = expense.splits || [];
 
-        e.participants.forEach((phone) => {
-          const member = group.members.find((m) => m.phone === phone);
-          if (member) {
-            balances[member.name] = (balances[member.name] || 0) - splitAmount;
-          }
-        });
-
-        const payer = group.members.find((m) => m.phone === e.paidBy);
-        if (payer) {
-          balances[payer.name] = (balances[payer.name] || 0) + amount;
+        if (!balances[payer]) {
+          balances[payer] = { name: payer === user.phone ? user.name : 'Unknown', amount: 0 };
         }
+
+        splits.forEach(({ phone, amount }) => {
+          if (phone === payer) return;
+          if (!balances[phone]) {
+            console.warn("Unknown phone in split:", phone);
+            return;
+          }
+          balances[phone].amount -= amount;
+          balances[payer].amount += amount;
+        });
       });
 
-      const keys = Object.keys(balances);
-      if (!keys.length) return <Text style={styles.emptyText}>No balance info.</Text>;
+      const balanceEntries = Object.values(balances);
 
-      return keys.map((k, index) => (
-        <View key={`${k}-${index}`} style={styles.balanceRow}>
-          <Text style={styles.balanceName}>{k}</Text>
+      if (!balanceEntries.length) return <Text style={styles.emptyText}>No balance info.</Text>;
+
+      return balanceEntries.map((entry, index) => (
+        <View key={`${entry.name}-${index}`} style={styles.balanceRow}>
+          <Text style={styles.balanceName}>{entry.name}</Text>
           <Text
             style={[
               styles.balanceAmount,
               {
-                color: balances[k] < 0 ? '#F44336' : '#4CAF50',
+                color: entry.amount < 0 ? '#F44336' : '#4CAF50',
               },
             ]}
           >
-            {balances[k] < 0 ? `Owes $${Math.abs(balances[k]).toFixed(2)}` : `Gets $${balances[k].toFixed(2)}`}
+            {entry.amount < 0
+              ? `Owes $${Math.abs(entry.amount).toFixed(2)}`
+              : `Gets $${entry.amount.toFixed(2)}`}
           </Text>
         </View>
       ));

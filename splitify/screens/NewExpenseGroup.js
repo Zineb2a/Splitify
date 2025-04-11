@@ -16,18 +16,20 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { db } from '../firebase';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, getDoc, doc } from 'firebase/firestore';
 
 const NewExpenseGroup = () => {
   const navigation = useNavigation();
   const route = useRoute();
-const { groupId, groupName, members = [] } = route.params || {};
+  const { groupId, groupName: initialGroupName, members: initialMembers = [] } = route.params || {};
 
   // Debug log: Check members passed from navigation
   useEffect(() => {
-    console.log('Group members from route params:', members);
-  }, [members]);
+    console.log('Group members from route params:', initialMembers);
+  }, [initialMembers]);
 
+  const [groupName, setGroupName] = useState(initialGroupName || '');
+  const [members, setMembers] = useState(initialMembers);
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [date, setDate] = useState(new Date());
@@ -63,6 +65,13 @@ const { groupId, groupName, members = [] } = route.params || {};
       }));
     }
 
+    console.log('Adding expense:', {
+      total: parseFloat(amount),
+      reason,
+      date: Timestamp.fromDate(date),
+      splits,
+    });
+
     try {
       await addDoc(collection(db, 'groups', groupId, 'expenses'), {
         total: parseFloat(amount),
@@ -70,12 +79,42 @@ const { groupId, groupName, members = [] } = route.params || {};
         date: Timestamp.fromDate(date),
         splits,
       });
+
+      console.log('Adding activity log...');
+      await addDoc(collection(db, 'groups', groupId, 'activityLogs'), {
+        action: 'expense_added',
+        reason,
+        total: parseFloat(amount),
+        date: Timestamp.fromDate(date),
+        createdAt: Timestamp.now(),
+      });
+      console.log('Activity log added successfully');
+
       // Optionally, you could add activity logging here
       navigation.navigate('ExpenseSuccess');
     } catch (error) {
       Alert.alert('Error', 'Error adding expense: ' + error.message);
     }
   };
+
+  useEffect(() => {
+    if (!groupId || members.length > 0) return;
+
+    const fetchGroup = async () => {
+      try {
+        const docSnap = await getDoc(doc(db, 'groups', groupId));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setGroupName(data.name);
+          setMembers(data.members || []);
+        }
+      } catch (error) {
+        console.error('Error fetching group:', error);
+      }
+    };
+
+    fetchGroup();
+  }, [groupId]);
 
   return (
     <SafeAreaView style={styles.container}>
