@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TouchableWithoutFeedback } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons, FontAwesome5, Feather } from '@expo/vector-icons';
 import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -37,6 +37,7 @@ const DashboardScreen = () => {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("FRIENDS");
   const { user } = useUser();
+  const [showSideNav, setShowSideNav] = useState(false);
 
   const [friends, setFriends] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -469,7 +470,7 @@ const DashboardScreen = () => {
           size={24}
           color="#FAFAFA"
           style={styles.menuIcon}
-          onPress={() => Alert.alert("Menu")}
+          onPress={() => setShowSideNav(true)}
         />
         <Ionicons
           name="ellipsis-vertical"
@@ -535,6 +536,29 @@ const DashboardScreen = () => {
             <Ionicons name="people" size={30} color="#FAFAFA" />
           </TouchableOpacity>
         </>
+      )}
+      {showSideNav && (
+        <TouchableWithoutFeedback onPress={() => setShowSideNav(false)}>
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+            <View style={styles.sideNav}>
+
+              <View style={{ flex: 1 }} />
+
+              <TouchableOpacity
+                style={[styles.sideNavItem, { marginBottom: 40 }]}
+                onPress={() => {
+                  setShowSideNav(false);
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: "Welcome" }],
+                  });
+                }}
+              >
+                <Text style={styles.sideNavText}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
       )}
     </View>
   );
@@ -639,5 +663,31 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     elevation: 4,
+  },
+  sideNav: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "25%",
+    height: "100%",
+    backgroundColor: "#fff",
+    paddingTop: 60,
+    paddingHorizontal: 16,
+    elevation: 10,
+    zIndex: 100,
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  sideNavItem: {
+    paddingVertical: 16,
+  },
+  sideNavText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#333",
+  },
+  sideNavClose: {
+    position: "absolute",
+    bottom: 30,
   },
 });
