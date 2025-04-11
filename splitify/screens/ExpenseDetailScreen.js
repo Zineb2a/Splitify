@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,21 +13,32 @@ import {
   FontAwesome5,
   Entypo,
 } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { db } from '../firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc,
+  doc,
+} from 'firebase/firestore';
+import { useUser } from '../UserContext';
 
 const ExpenseDetailScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const { user } = useUser();
 
   const {
     type = 'friend',
-    name = 'Subodh Kolhe',
-    amount = '$500',
+    name = '',
+    phone = '',
     youOwe = true,
-    entries: initialEntries = [],
   } = route.params || {};
 
-  const [entries, setEntries] = useState(initialEntries);
+  const [entries, setEntries] = useState([]);
+  const [totalAmount, setTotalAmount] = useState(0);
 
   const iconMap = {
     car: <FontAwesome5 name="car" size={24} color="#9FB3DF" />,
@@ -36,24 +47,72 @@ const ExpenseDetailScreen = () => {
     default: <Entypo name="dot-single" size={24} color="#9FB3DF" />,
   };
 
-  const handleDeleteEntry = (index) => {
-    Alert.alert(
-      'Delete Expense',
-      'Are you sure you want to delete this expense?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            const newEntries = [...entries];
-            newEntries.splice(index, 1);
-            setEntries(newEntries);
-          },
-        },
-      ]
-    );
+  const fetchExpenses = async () => {
+    try {
+      const q = query(
+        collection(db, 'expenses'),
+        where('participants', 'array-contains', user.phone)
+      );
+      const snapshot = await getDocs(q);
+      const results = snapshot.docs
+        .map((doc) => {
+          const data = doc.data();
+          const involvesFriend =
+            data.participants &&
+            data.participants.includes(user.phone) &&
+            data.participants.includes(phone);
+
+          if (!involvesFriend) return null;
+
+          return {
+            id: doc.id,
+            reason: data.reason || 'No description',
+            amount: data.amount || 0,
+            date: data.date || new Date(),
+            icon: data.category?.toLowerCase() || 'default',
+          };
+        })
+        .filter(Boolean);
+      setEntries(results);
+      const total = results.reduce((sum, item) => sum + (item.amount || 0), 0);
+      setTotalAmount(total);
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+    }
   };
+
+  const handleDeleteEntry = async (entryId) => {
+    Alert.alert('Delete Expense', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, 'users', user.uid, 'expenses', entryId));
+            setEntries((prev) => prev.filter((item) => item.id !== entryId));
+          } catch (err) {
+            Alert.alert('Error', 'Failed to delete expense.');
+            console.error(err);
+          }
+        },
+      },
+    ]);
+  };
+
+  useEffect(() => {
+    if (user?.uid && phone) {
+      fetchExpenses();
+    }
+  }, [user, phone]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.uid && phone) {
+        fetchExpenses();
+      }
+    }, [user, phone])
+  );
 
   return (
     <View style={styles.container}>
@@ -78,7 +137,7 @@ const ExpenseDetailScreen = () => {
           </Text>
         </View>
         <Text style={styles.name}>{name}</Text>
-        <Text style={styles.amount}>{amount}</Text>
+        <Text style={styles.amount}>${totalAmount.toFixed(2)}</Text>
         <Text style={styles.subtitle}>
           {youOwe ? 'You owe' : 'You are owed'}
           {type === 'group' && youOwe ? ` ${name}` : ''}
@@ -89,10 +148,9 @@ const ExpenseDetailScreen = () => {
             style={styles.buttonOutline}
             onPress={() =>
               navigation.navigate('SettleUpSelect', {
-                from: 'Z',
-                to: name[0],
+                from: user.name,
+                to: name,
                 name,
-                amount,
               })
             }
           >
@@ -109,21 +167,21 @@ const ExpenseDetailScreen = () => {
 
       {/* Expenses List */}
       <ScrollView contentContainerStyle={styles.entriesContainer}>
-        {entries.map((item, index) => (
+        {entries.map((item) => (
           <TouchableOpacity
-            key={index}
+            key={item.id}
             style={styles.card}
-            onLongPress={() => handleDeleteEntry(index)}
+            onLongPress={() => handleDeleteEntry(item.id)}
           >
-            {iconMap[item.icon] || iconMap.default}
+            {iconMap[item.icon?.toLowerCase()] || iconMap.default}
             <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardSubtitle}>
-                Added by {item.by === 'you' ? 'You' : item.by}
-              </Text>
+              <Text style={styles.cardTitle}>{item.reason}</Text>
+              <Text style={styles.cardSubtitle}>Added by You</Text>
             </View>
             <View style={styles.cardRight}>
-              <Text style={styles.cardDate}>{item.date}</Text>
+              <Text style={styles.cardDate}>
+                {item.date?.toDate().toISOString().split('T')[0]}
+              </Text>
               <Text style={styles.cardAmount}>${item.amount}</Text>
             </View>
           </TouchableOpacity>
@@ -133,7 +191,14 @@ const ExpenseDetailScreen = () => {
       {/* Floating Button */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('NewTransaction')}
+        onPress={() =>
+          navigation.navigate('NewExpenseFriend', {
+            selectedFriend: {
+              name,
+              phone,
+            },
+          })
+        }
       >
         <Ionicons name="add" size={30} color="#FAFAFA" />
       </TouchableOpacity>
@@ -143,7 +208,6 @@ const ExpenseDetailScreen = () => {
 
 export default ExpenseDetailScreen;
 
-// Styles remain unchanged
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFDF8' },
   header: {
