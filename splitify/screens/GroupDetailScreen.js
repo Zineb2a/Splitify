@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  FlatList,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -221,11 +222,29 @@ const GroupDetailScreen = () => {
     }
 
     if (activeTab === 'Totals') {
-      const total = group.expenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+      const total = group.expenses.reduce((sum, e) => sum + parseFloat(e.total || 0), 0);
+      const perMemberTotals = {};
+
+      group.expenses.forEach((exp) => {
+        (exp.splits || []).forEach((s) => {
+          if (!perMemberTotals[s.name]) {
+            perMemberTotals[s.name] = 0;
+          }
+          perMemberTotals[s.name] += s.amount;
+        });
+      });
+
       return (
         <View>
-          <Text style={styles.totalAmount}>Total Spent: ${total?.toFixed(2) || 0}</Text>
-          {/* Placeholder for future graph, e.g. contribution pie chart */}
+          <Text style={styles.totalAmount}>Total Spent: ${total.toFixed(2)}</Text>
+          <View style={{ marginTop: 16 }}>
+            {Object.entries(perMemberTotals).map(([name, amount]) => (
+              <View key={name} style={styles.balanceRow}>
+                <Text style={styles.balanceName}>{name}</Text>
+                <Text style={styles.balanceAmount}>Spent: ${amount.toFixed(2)}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       );
     }
@@ -256,17 +275,6 @@ const GroupDetailScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Members */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.membersBar}>
-        {group.members?.length > 0 ? [...group.members.filter((m, i, arr) =>
-          arr.findIndex(a => a.phone === m.phone) === i
-        )].map((m, idx) => (
-          <View key={m.phone?.toString() || `member-${idx}`} style={styles.memberBubble}>
-            <Text style={styles.memberText}>{m.name?.[0] || "?"}</Text>
-          </View>
-        )) : <Text style={styles.emptyText}>No members yet.</Text>}
-      </ScrollView>
-
       {/* Tabs */}
       <View style={styles.tabs}>
         {tabs.map((t) => (
@@ -276,10 +284,34 @@ const GroupDetailScreen = () => {
         ))}
       </View>
 
-      {/* Tab Content */}
-      <ScrollView contentContainerStyle={styles.contentContainer}>
-        {renderTabContent()}
-      </ScrollView>
+      <View style={{ flex: 1 }}>
+        {/* Members */}
+        <FlatList
+          contentContainerStyle={[styles.membersBarList, { flexDirection: 'column' }]}
+          data={[...group.members.filter((m, i, arr) => arr.findIndex(a => a.phone === m.phone) === i)]}
+          keyExtractor={(item) => item.phone || Math.random().toString()}
+          renderItem={({ item }) => {
+            const totalOwed = group.expenses.reduce((sum, exp) => {
+              const split = exp.splits?.find(s => s.phone === item.phone);
+              return split ? sum + parseFloat(split.amount) : sum;
+            }, 0);
+
+            return (
+              <View style={styles.memberBarHorizontal}>
+                <View style={styles.memberNameBubble}>
+                  <Text style={styles.memberBarName}>{item.name}</Text>
+                </View>
+                <Text style={styles.memberBarAmount}>${totalOwed.toFixed(2)}</Text>
+              </View>
+            );
+          }}
+        />
+
+        {/* Tab Content */}
+        <ScrollView contentContainerStyle={styles.contentContainer}>
+          {renderTabContent()}
+        </ScrollView>
+      </View>
 
       <TouchableOpacity
         style={styles.fab}
@@ -318,19 +350,41 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FAFAFA',
   },
-  membersBar: {
-    paddingVertical: 10,
+  membersBarList: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFFDF8',
+    minHeight: 120,
+  },
+  memberBarHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#D8EAFE',
+    borderRadius: 12,
+    marginBottom: 10,
     paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderColor: '#9EC6F3',
+    borderWidth: 1,
   },
-  memberBubble: {
-    backgroundColor: '#FFF1D5',
-    borderRadius: 25,
-    padding: 10,
-    marginRight: 10,
+  memberNameBubble: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
   },
-  memberText: {
-    fontWeight: 'bold',
-    color: '#9EC6F3',
+  memberBarName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2E6DA4',
+  },
+  memberBarAmount: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginLeft: 8,
   },
   tabs: {
     flexDirection: 'row',
@@ -352,8 +406,8 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   contentContainer: {
+    flexGrow: 1,
     padding: 16,
-    paddingBottom: 100,
   },
   expenseCard: {
     backgroundColor: '#fff',
@@ -380,12 +434,22 @@ const styles = StyleSheet.create({
   balanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderColor: '#eee',
   },
-  balanceName: { fontSize: 14, color: '#333' },
-  balanceAmount: { fontSize: 14, fontWeight: '600' },
+  balanceName: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  balanceAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'right',
+    flexShrink: 0,
+  },
   totalAmount: {
     fontSize: 18,
     fontWeight: 'bold',
